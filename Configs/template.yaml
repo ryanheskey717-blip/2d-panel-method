@@ -1,0 +1,15 @@
+# input
+input_file: "Geometries/;asldnflkasdnf"
+
+# conditions
+M_inf = 0.1
+T_inf = 20 # deg C
+alpha = 0 # deg
+
+# solver
+
+
+# wake
+
+
+# turbulence/viscous
