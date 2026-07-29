@@ -18,13 +18,14 @@ mesh.computeAandb()
 mesh.solve()
 
 # analysis
-velocity_field = General.VelocityField((-0.05, 0.15), (-0.05, 0.05), 100, 50, mesh, config)
+velocity_field = General.VelocityField((-0.05, 0.15), (-0.05, 0.05), 100, 50, mesh, config) # (-0.01, 0.01), (-0.01, 0.01)
 
 # plotting
 plt.figure()
 mesh.plotGeometry()
 mesh.plotControlPoints()
 mesh.plotNormals(size=1) # size is %
+mesh.plotTangents(size=1) # size is %
 velocity_field.plotStreamlines(colour='velocity')
 plt.axis('scaled')
 plt.show()

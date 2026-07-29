@@ -27,6 +27,9 @@ class Config:
         self.T_inf = self.full_data["T_inf"]
         self.alpha = np.deg2rad(self.full_data["alpha"])
 
+        # solver
+        self.control_point_offset = float(self.full_data["control_point_offset"])
+
         # calculate other important values
         self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * self.T_inf)
         self.V_inf_vec = np.array([

@@ -13,7 +13,7 @@ T_inf: 20 # deg C
 alpha: 0 # deg
 
 # solver
-
+control_point_offset: 1e-5 # m (for numerical stability)
 
 # wake
 
