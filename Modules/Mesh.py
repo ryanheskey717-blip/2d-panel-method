@@ -57,12 +57,12 @@ class Mesh:
         return u, v
     
     def getPointSourcesVelocity(self, sample_point):
+        ut = 0; vt = 0
         for i in range(len(self.control_points)):
-            #u, v = self.getPointSourceVelocity(self.control_points)
-            distance = np.sqrt((sample_point[0] - self.control_points[i, 0])**2 + (sample_point[1] - self.control_points[i, 1])**2)
-            u = self.source_strengths[i]/(2*np.pi) * (sample_point[0] - self.control_points[i, 0])/distance
-            v = self.source_strengths[i]/(2*np.pi) * (sample_point[1] - self.control_points[i, 1])/distance
-        return u, v
+            u, v = self.getPointSourceVelocity(self.control_points[i], sample_point, self.source_strengths[i])
+            ut += u
+            vt += v
+        return ut, vt
 
     # =================== Preconditioning =================== #
     def computeAandb(self):
@@ -78,7 +78,7 @@ class Mesh:
         for i in range(len(self.control_points)):
             self.b[i] = - np.dot(self.V_inf_vec, self.normals[i])
 
-        if self.verbose: ########################
+        if False: ########################
             print('A:', self.A)
             print('b:', self.b)
 
@@ -89,10 +89,16 @@ class Mesh:
 
     # ==================== Plotting ======================== #
 
-    def plotGeometry(self, points=True):
+    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, vectors_percent_scale=100):
         plt.plot(self.vertices[:, 0], self.vertices[:, 1], color='black', linewidth=1)
-        if points:
+        if vertices:
             plt.scatter(self.vertices[:, 0], self.vertices[:, 1], color='black', s=3)
+        if control_points:
+            self.plotControlPoints()
+        if normals:
+            self.plotNormals(size=vectors_percent_scale)
+        if tangents:
+            self.plotTangents(size=vectors_percent_scale)
 
     def plotControlPoints(self):
         plt.scatter(self.control_points[:, 0], self.control_points[:, 1], color='red', s=3)
