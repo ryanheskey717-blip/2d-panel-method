@@ -1,10 +1,16 @@
+## NOTE: if anything is added here the Config class must be updated accordingly
+
+# settings
+verbose: True
+
 # input
-input_file: "Geometries/;asldnflkasdnf"
+geo_file: "Geometries/naca0012_20.dat"
+chord: 0.1 # m
 
 # conditions
-M_inf = 0.1
-T_inf = 20 # deg C
-alpha = 0 # deg
+M_inf: 0.1
+T_inf: 20 # deg C
+alpha: 0 # deg
 
 # solver
 
