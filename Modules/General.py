@@ -58,7 +58,7 @@ class VelocityField:
         # add in geometry influence
         for i in range(len(self.meshgrid[0][0, :])):
             for j in range(len(self.meshgrid[0][:, 0])):
-                u, v = geo_mesh.getPointSourcesVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
+                u, v = geo_mesh.getConstantSourcePanelsVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
                 self.v[0][j, i] += u
                 self.v[1][j, i] += v
 
@@ -88,6 +88,9 @@ class VelocityField:
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], self.v[1], levels=50, cmap='viridis')
         elif var == "mag":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], np.sqrt(self.v[0]**2 + self.v[1]**2), levels=50, cmap='viridis')
+        elif var == "pressure":
+            print("Not yet supported: Check back soon!")
+            return
         else:
             print("\nWarning!: No valid variable selected for contour plot.\n")
             return

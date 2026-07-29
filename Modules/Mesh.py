@@ -63,29 +63,66 @@ class Mesh:
             ut += u
             vt += v
         return ut, vt
+    
+    def getConstantSourcePanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
+
+        L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
+        phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
+
+        dx = sample_point[0] - vertex_1[0]
+        dy = sample_point[1] - vertex_1[1]
+
+        xl = dx * np.cos(phi) + dy * np.sin(phi)
+        yl = -dx * np.sin(phi) + dy * np.cos(phi)
+
+        r1 = np.sqrt(xl**2 + yl**2) # distance from vertex 1
+        r2 = np.sqrt((xl-L)**2 + yl**2) # distance from vertex 2
+
+        theta1 = np.atan2(yl, xl)
+        theta2 = np.atan2(yl, xl - L)
+
+        beta = theta2 - theta1 # angular width of panel from sample point
+        beta = (beta + np.pi) % (2*np.pi) - np.pi # wrap into (-pi, pi]
+
+        ul = strength / (2 * np.pi) * np.log( r1 / r2 ) # local horizontal velocity (along panel)
+        vl = strength / (2 * np.pi) * beta # local vertical velocity (normal to panel)
+
+        u = ul * np.cos(phi) - vl * np.sin(phi)
+        v = ul * np.sin(phi) + vl * np.cos(phi)
+        
+        return u, v
+    
+    def getConstantSourcePanelsVelocity(self, sample_point):
+        ut = 0; vt = 0
+        for i in range(len(self.control_points)):
+            u, v = self.getConstantSourcePanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, self.source_strengths[i])
+            ut += u
+            vt += v
+        return ut, vt
 
     # =================== Preconditioning =================== #
     def computeAandb(self):
-        for i in range(len(self.control_points)):
-            for j in range(len(self.control_points)):
+        for i in range(len(self.control_points)): # control point
+            control_point = self.control_points[i] + self.normals[i] * self.control_point_offset
+            for j in range(len(self.control_points)): # panel
                 if i == j:
-                    self.A[j, i] = 0.5 # at self control point, velocity == 0
+                    self.A[i, j] = 0.5 # at self control point, velocity == 0
                 else:
-                    control_point = np.array([self.control_points[j, 0], self.control_points[j, 1]]) + self.normals[i] * self.control_point_offset
-                    u, v = self.getPointSourceVelocity((self.control_points[j, 0], self.control_points[j, 1]), control_point, strength=1.0)
-                    self.A[j, i] = np.dot(self.normals[i], np.array([u, v]))
+                    u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], control_point, strength=1.0)
+                    self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
         
-        for i in range(len(self.control_points)):
+        for i in range(len(self.control_points)): # control points
             self.b[i] = - np.dot(self.V_inf_vec, self.normals[i])
-
-        if False: ########################
-            print('A:', self.A)
-            print('b:', self.b)
 
 
     # ====================== Solving ========================= #
     def solve(self):
         self.source_strengths = np.linalg.solve(self.A, self.b)
+
+        if False: #TODO: DELETE #######################
+            print('A:', self.A)
+            print('b:', self.b)
+            print('sig:', self.source_strengths)
 
     # ==================== Plotting ======================== #
 
