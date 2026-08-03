@@ -20,7 +20,7 @@ venv\Scripts\activate.ps1
 
 cmd:
 
-myenv\Scripts\Activate.bat
+venv\Scripts\Activate.bat
 
 pip install -r requirements.txt
 
