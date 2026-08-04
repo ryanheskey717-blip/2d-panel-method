@@ -6,47 +6,51 @@ import matplotlib.pyplot as plt
 
 class Mesh:
     def __init__(self, config):
-        # ============== Important values from config ================ #
-        self.verbose = config.verbose
-        self.control_point_offset = config.control_point_offset
+        # ============== Input Values ================ #
+        self.config = config
 
-        # ==================== Load geometry ======================== #
-        self.vertices = np.loadtxt(config.geo_file, skiprows=1)
-        self.vertices *= config.chord
+        # ============== Load Geometry =============== #
+        self.vertices = np.loadtxt(self.config.geo_file, skiprows=1)
+        self.vertices *= self.config.chord
 
-        # ============= Calculate control points, normals and tangents ============== #
+        # ============ Get Mesh Parameters ============ #
+        self.getMeshParameters(vertices=self.vertices)
+
+
+    def getMeshParameters(self, vertices):
+        # ============= Calculate control points, normals, tangents and lengths ============== #
         self.normals = []
-        for i in range(len(self.vertices) - 1):
+        for i in range(len(vertices) - 1):
             self.normals.append([
-                (self.vertices[i+1, 1] - self.vertices[i, 1]),
-                -(self.vertices[i+1, 0] - self.vertices[i, 0]),
+                (vertices[i+1, 1] - vertices[i, 1]),
+                -(vertices[i+1, 0] - vertices[i, 0]),
             ])
         self.normals = np.array(self.normals)
         self.normals /= np.linalg.norm(self.normals, axis=1, keepdims=True) # normalise
 
         self.tangents = []
-        for i in range(len(self.vertices) - 1):
+        for i in range(len(vertices) - 1):
             self.tangents.append([
-                -(self.vertices[i+1, 0] - self.vertices[i, 0]),
-                -(self.vertices[i+1, 1] - self.vertices[i, 1]),
+                -(vertices[i+1, 0] - vertices[i, 0]),
+                -(vertices[i+1, 1] - vertices[i, 1]),
             ])
         self.tangents = np.array(self.tangents)
+        self.lengths = np.linalg.norm(self.tangents, axis=1)
         self.tangents /= np.linalg.norm(self.tangents, axis=1, keepdims=True) # normalise
 
         self.control_points = []
         for i in range(len(self.vertices) - 1):
             self.control_points.append([
-                (self.vertices[i, 0] + self.vertices[i+1, 0]) / 2, 
-                (self.vertices[i, 1] + self.vertices[i+1, 1]) / 2
+                (vertices[i, 0] + vertices[i+1, 0]) / 2, 
+                (vertices[i, 1] + vertices[i+1, 1]) / 2
             ])
         self.control_points = np.array(self.control_points)
+        self.control_points += self.normals * self.config.control_point_offset # offset a bit from surface
 
         # ================= Preallocate Arrays ==================== #
-        self.A = np.zeros((len(self.control_points), len(self.control_points)))
-        self.b = np.zeros(len(self.control_points))
-
-        # add freestream
-        self.V_inf_vec = config.V_inf_vec
+        self.N = len(self.control_points)
+        self.A = np.zeros((self.N, self.N))
+        self.b = np.zeros(self.N)
 
     
     # ================ Elementary flows =================== #
@@ -58,7 +62,7 @@ class Mesh:
     
     def getPointSourcesVelocity(self, sample_point):
         ut = 0; vt = 0
-        for i in range(len(self.control_points)):
+        for i in range(self.N):
             u, v = self.getPointSourceVelocity(self.control_points[i], sample_point, self.source_strengths[i])
             ut += u
             vt += v
@@ -94,7 +98,7 @@ class Mesh:
     
     def getConstantSourcePanelsVelocity(self, sample_point):
         ut = 0; vt = 0
-        for i in range(len(self.control_points)):
+        for i in range(self.N):
             u, v = self.getConstantSourcePanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, self.source_strengths[i])
             ut += u
             vt += v
@@ -102,17 +106,16 @@ class Mesh:
 
     # =================== Preconditioning =================== #
     def computeAandb(self):
-        for i in range(len(self.control_points)): # control point
-            control_point = self.control_points[i] + self.normals[i] * self.control_point_offset
-            for j in range(len(self.control_points)): # panel
+        for i in range(self.N): # control point
+            for j in range(self.N): # panel
                 if i == j:
                     self.A[i, j] = 0.5 # at self control point, velocity == 0
                 else:
-                    u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], control_point, strength=1.0)
+                    u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
                     self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
         
-        for i in range(len(self.control_points)): # control points
-            self.b[i] = - np.dot(self.V_inf_vec, self.normals[i])
+        for i in range(self.N): # control points
+            self.b[i] = - np.dot(self.config.V_inf_vec, self.normals[i])
 
 
     # ====================== Solving ========================= #
@@ -123,6 +126,65 @@ class Mesh:
             print('A:', self.A)
             print('b:', self.b)
             print('sig:', self.source_strengths)
+
+
+    # ================= Flow Properties =================== #
+
+    def calculateTangentialVelocityAtControlPoints(self):
+        self.velocity_tangent_at_control_points = np.zeros(self.N)
+        for i in range(self.N): # control point
+            u_total = self.config.V_inf_vec[0] # initialise at freestream velocity
+            v_total = self.config.V_inf_vec[1]
+            
+            for j in range(self.N): # panel
+                u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=self.source_strengths[j])
+                u_total += u
+                v_total += v
+            self.velocity_tangent_at_control_points[i] = np.dot(np.array([u_total, v_total]), self.tangents[i])
+
+    def calculatePressureOnPanels(self):
+        if self.config.pressure_calculation == "inviscid_bernoulli":
+            self.calculateTangentialVelocityAtControlPoints()
+            self.pressureFromBernoulli()
+        else:
+            print(f"\nWarning: {self.pressure_calculation} not yet supported.\n")
+
+    def pressureFromBernoulli(self): # dimensional
+        self.pressure = self.config.p_inf - 0.5 * self.config.rho_inf * ( self.velocity_tangent_at_control_points ** 2 - self.config.V_inf ** 2 )
+        self.cp = 1 - (self.velocity_tangent_at_control_points / self.config.V_inf) ** 2
+
+    def calculateForcesAndMoments(self):
+        self.total_force = self.pressureForce() + self.viscousForce()
+        self.total_moment = self.pressureMoment() + self.viscousMoment()
+
+        self.c_force = self.total_force / ( 0.5 * self.config.rho_inf * self.config.V_inf ** 2 * self.config.chord)
+        self.c_moment = self.total_moment / ( 0.5 * self.config.rho_inf * self.config.V_inf ** 2 * self.config.chord ** 2)
+        print('\n', self.total_force, '[N/m]')
+        print(self.c_force, '[]')
+
+        print('\n', self.total_moment, '[N.m/m]')
+        print(self.c_moment, '[]')
+
+    def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
+        
+        fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0])
+        fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1])
+
+        return np.array([fx, fy])
+
+    def viscousForce(self):
+        return np.array([0, 0])
+
+    def pressureMoment(self):
+
+        r = self.control_points - self.config.ref_position
+        forces = - self.pressure[:, None] * self.normals * self.lengths[:, None]
+
+        return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
+
+    def viscousMoment(self):
+        return 0
+
 
     # ==================== Plotting ======================== #
 

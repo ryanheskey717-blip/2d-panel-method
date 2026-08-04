@@ -21,17 +21,27 @@ class Config:
         # input
         self.geo_file = self.full_data["geo_file"]
         self.chord = self.full_data["chord"]
+        self.ref_position = np.array(self.full_data["ref_position"])
 
         # conditions
         self.M_inf = self.full_data["M_inf"]
         self.T_inf = self.full_data["T_inf"]
+        self.rho_inf = self.full_data["rho_inf"]
+        self.p_inf = self.full_data["p_inf"]
+
         self.alpha = np.deg2rad(self.full_data["alpha"])
 
         # solver
         self.control_point_offset = float(self.full_data["control_point_offset"])
 
+        # flow properties
+        self.pressure_calculation = self.full_data["pressure_calculation"]
+
+        # visualisation
+        self.visualisation = self.full_data["visualisation"]
+
         # calculate other important values
-        self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * self.T_inf)
+        self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * (self.T_inf + 273.15))
         self.V_inf_vec = np.array([
             self.V_inf * np.cos(self.alpha),
             self.V_inf * np.sin(self.alpha)
@@ -41,6 +51,9 @@ class Config:
 
 class VelocityField:
     def __init__(self, xlim, ylim, nx, ny, geo_mesh, config):
+
+        # input values
+        self.config = config
 
         # get x and y coords
         x = np.linspace(xlim[0], xlim[1], nx)
@@ -63,8 +76,6 @@ class VelocityField:
                 self.v[1][j, i] += v
 
 
-
-
     # ================ Velocity Plotting ================== #
 
     def plotStreamlines(self, colour='C0', density=1):
@@ -72,7 +83,7 @@ class VelocityField:
             colour = np.sqrt(self.v[0]**2 + self.v[1]**2)
 
         # plot streamlines
-        strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='viridis')
+        strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='inferno')
         plt.colorbar(strm.lines)
 
         # remove arrows
@@ -89,8 +100,7 @@ class VelocityField:
         elif var == "mag":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], np.sqrt(self.v[0]**2 + self.v[1]**2), levels=50, cmap='viridis')
         elif var == "pressure":
-            print("Not yet supported: Check back soon!")
-            return
+            contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=50, cmap='viridis')
         else:
             print("\nWarning!: No valid variable selected for contour plot.\n")
             return
