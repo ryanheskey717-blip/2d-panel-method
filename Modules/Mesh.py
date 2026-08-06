@@ -39,7 +39,7 @@ class Mesh:
         self.tangents /= np.linalg.norm(self.tangents, axis=1, keepdims=True) # normalise
 
         self.control_points = []
-        for i in range(len(self.vertices) - 1):
+        for i in range(len(vertices) - 1):
             self.control_points.append([
                 (vertices[i, 0] + vertices[i+1, 0]) / 2, 
                 (vertices[i, 1] + vertices[i+1, 1]) / 2
