@@ -71,10 +71,10 @@ class VelocityField:
         # add in geometry influence
         for i in range(len(self.meshgrid[0][0, :])):
             for j in range(len(self.meshgrid[0][:, 0])):
-                u, v = geo_mesh.getConstantSourcePanelsVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
-                self.v[0][j, i] += u
-                self.v[1][j, i] += v
-
+                u1, v1 = geo_mesh.getConstantSourcePanelsVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
+                u2, v2 = geo_mesh.getConstantVortexPanelsVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
+                self.v[0][j, i] += u1 + u2
+                self.v[1][j, i] += v1 + v2
 
     # ================ Velocity Plotting ================== #
 
@@ -86,11 +86,13 @@ class VelocityField:
         strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='inferno')
         plt.colorbar(strm.lines)
 
-        # remove arrows
-        ax = plt.gca()
-        for art in ax.get_children():
-            if isinstance(art, plt.matplotlib.patches.FancyArrowPatch):
-                art.remove()
+        # remove arrows if needed
+        arrows = False
+        if not arrows:
+            ax = plt.gca()
+            for art in ax.get_children():
+                if isinstance(art, plt.matplotlib.patches.FancyArrowPatch):
+                    art.remove()
 
     def plotContour(self, var, colorbar=True):
         if var == "vx":
@@ -100,7 +102,7 @@ class VelocityField:
         elif var == "mag":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], np.sqrt(self.v[0]**2 + self.v[1]**2), levels=50, cmap='viridis')
         elif var == "pressure":
-            contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=50, cmap='viridis')
+            contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=500, cmap='viridis', vmin=-1, vmax=1)
         else:
             print("\nWarning!: No valid variable selected for contour plot.\n")
             return

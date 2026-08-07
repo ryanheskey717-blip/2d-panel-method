@@ -49,8 +49,8 @@ class Mesh:
 
         # ================= Preallocate Arrays ==================== #
         self.N = len(self.control_points)
-        self.A = np.zeros((self.N, self.N))
-        self.b = np.zeros(self.N)
+        self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
+        self.b = np.zeros(self.N+1)
 
     
     # ================ Elementary flows =================== #
@@ -88,7 +88,7 @@ class Mesh:
         beta = theta2 - theta1 # angular width of panel from sample point
         beta = (beta + np.pi) % (2*np.pi) - np.pi # wrap into (-pi, pi]
 
-        ul = strength / (2 * np.pi) * np.log( r1 / r2 ) # local horizontal velocity (along panel)
+        ul = - strength / (2 * np.pi) * np.log( r2 / r1 ) # local horizontal velocity (along panel)
         vl = strength / (2 * np.pi) * beta # local vertical velocity (normal to panel)
 
         u = ul * np.cos(phi) - vl * np.sin(phi)
@@ -104,28 +104,127 @@ class Mesh:
             vt += v
         return ut, vt
 
+    def getConstantDoubletPanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
+
+        L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
+        phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
+
+        dx = sample_point[0] - vertex_1[0]
+        dy = sample_point[1] - vertex_1[1]
+
+        xl = dx * np.cos(phi) + dy * np.sin(phi)
+        yl = -dx * np.sin(phi) + dy * np.cos(phi)
+
+        r1_2 = xl**2 + yl**2 # distance from vertex 1
+        r2_2 = (xl-L)**2 + yl**2 # distance from vertex 2
+
+        ul = strength / (2 * np.pi) * yl * (1/r1_2 - 1/r2_2) # local horizontal velocity (along panel)
+        vl = - strength / (2 * np.pi) * (xl/r1_2 - (xl-L)/r2_2) # local vertical velocity (normal to panel)
+
+        u = ul * np.cos(phi) - vl * np.sin(phi)
+        v = ul * np.sin(phi) + vl * np.cos(phi)
+
+        return u, v
+
+    def getConstantDoubletPanelsVelocity(self, sample_point, strength=1.0):
+        ut = 0; vt = 0
+        for i in range(self.N):
+            u, v = self.getConstantVortexPanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, strength)
+            ut += u
+            vt += v
+        return ut, vt
+
+    def getConstantVortexPanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
+    
+        L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
+        phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
+
+        dx = sample_point[0] - vertex_1[0]
+        dy = sample_point[1] - vertex_1[1]
+
+        xl = dx * np.cos(phi) + dy * np.sin(phi)
+        yl = -dx * np.sin(phi) + dy * np.cos(phi)
+
+        r1 = np.sqrt(xl**2 + yl**2) # distance from vertex 1
+        r2 = np.sqrt((xl-L)**2 + yl**2) # distance from vertex 2
+
+        theta1 = np.atan2(yl, xl)
+        theta2 = np.atan2(yl, xl - L)
+
+        beta = theta2 - theta1 # angular width of panel from sample point
+        beta = (beta + np.pi) % (2*np.pi) - np.pi # wrap into (-pi, pi]
+
+        ul = 0; vl = 0
+        if xl >= 0 and xl <= L:
+            if yl <= 1e-5 and yl > 0:
+                ul = - strength / 2
+            elif yl >= -1e-5 and yl < 0:
+                ul = strength / 2
+            elif yl == 0:
+                ul = 0
+            else:
+                ul = - strength / (2 * np.pi) * beta # local horizontal velocity (along panel)
+            vl = strength / (2 * np.pi) * np.log( r1 / r2 ) # local vertical velocity (normal to panel)
+        else:
+            ul = - strength / (2 * np.pi) * beta # local horizontal velocity (along panel)
+            vl = strength / (2 * np.pi) * np.log( r1 / r2 ) # local vertical velocity (normal to panel)
+
+        u = ul * np.cos(phi) - vl * np.sin(phi)
+        v = ul * np.sin(phi) + vl * np.cos(phi)
+        
+        return u, v
+    
+    def getConstantVortexPanelsVelocity(self, sample_point, strength=None):
+        ut = 0; vt = 0
+        for i in range(self.N):
+            if strength is None:
+                u, v = self.getConstantVortexPanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, self.vortex_strength)
+            else:
+                u, v = self.getConstantVortexPanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, strength)
+            ut += u
+            vt += v
+        return ut, vt
+
     # =================== Preconditioning =================== #
     def computeAandb(self):
+
+        # section of A relating to no-penetration boundary condition
         for i in range(self.N): # control point
-            for j in range(self.N): # panel
-                if i == j:
-                    self.A[i, j] = 0.5 # at self control point, velocity == 0
-                else:
-                    u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
+            for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
+                if j == self.N: # vortex influence
+                    u, v = self.getConstantVortexPanelsVelocity(self.control_points[i], strength=1.0)
                     self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
-        
-        for i in range(self.N): # control points
-            self.b[i] = - np.dot(self.config.V_inf_vec, self.normals[i])
+                else:
+                    if i == j: # source self-influence
+                        self.A[i, j] = 0.5
+                    else:
+                        u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
+                        self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
+
+        # section of A relating to kutta condition (these find tangential influences)
+        for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
+            if j == self.N: # vortex influence
+                u1, v1 = self.getConstantVortexPanelsVelocity(self.control_points[0], strength=1.0)  # at upper TE control point
+                u2, v2 = self.getConstantVortexPanelsVelocity(self.control_points[-1], strength=1.0) # at lower TE control point
+                self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
+            else:
+                u1, v1 = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[0], strength=1.0)  # at upper TE control point
+                u2, v2 = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[-1], strength=1.0) # at lower TE control point
+                self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
+
+        # RHS
+        for i in range(self.N + 1): # control points + kutta condition
+            if i == self.N: # kutta row
+                self.b[-1] = - (np.dot(self.config.V_inf_vec, self.tangents[0]) + np.dot(self.config.V_inf_vec, self.tangents[-1])) # - (upper + lower)
+            else:
+                self.b[i] = - np.dot(self.config.V_inf_vec, self.normals[i])
 
 
     # ====================== Solving ========================= #
     def solve(self):
-        self.source_strengths = np.linalg.solve(self.A, self.b)
-
-        if False: #TODO: DELETE #######################
-            print('A:', self.A)
-            print('b:', self.b)
-            print('sig:', self.source_strengths)
+        x = np.linalg.solve(self.A, self.b)
+        self.source_strengths = x[:-1]
+        self.vortex_strength = x[-1]
 
 
     # ================= Flow Properties =================== #
@@ -133,14 +232,8 @@ class Mesh:
     def calculateTangentialVelocityAtControlPoints(self):
         self.velocity_tangent_at_control_points = np.zeros(self.N)
         for i in range(self.N): # control point
-            u_total = self.config.V_inf_vec[0] # initialise at freestream velocity
-            v_total = self.config.V_inf_vec[1]
-            
-            for j in range(self.N): # panel
-                u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=self.source_strengths[j])
-                u_total += u
-                v_total += v
-            self.velocity_tangent_at_control_points[i] = np.dot(np.array([u_total, v_total]), self.tangents[i])
+            total_vel = self.config.V_inf_vec + self.getConstantSourcePanelsVelocity(self.control_points[i]) + self.getConstantVortexPanelsVelocity(self.control_points[i])
+            self.velocity_tangent_at_control_points[i] = np.dot(total_vel, self.tangents[i])
 
     def calculatePressureOnPanels(self):
         if self.config.pressure_calculation == "inviscid_bernoulli":
@@ -159,11 +252,19 @@ class Mesh:
 
         self.c_force = self.total_force / ( 0.5 * self.config.rho_inf * self.config.V_inf ** 2 * self.config.chord)
         self.c_moment = self.total_moment / ( 0.5 * self.config.rho_inf * self.config.V_inf ** 2 * self.config.chord ** 2)
-        print('\n', self.total_force, '[N/m]')
-        print(self.c_force, '[]')
 
-        print('\n', self.total_moment, '[N.m/m]')
-        print(self.c_moment, '[]')
+        print(f'\nFx: {self.total_force[0]:.2f} N/m | Fy: {self.total_force[1]:.2f} N/m')
+        print(f'Cx: {self.c_force[0]:.2f}      | Cy: {self.c_force[1]:.2f}')
+
+        lift = np.dot(self.total_force, np.array([-np.sin(self.config.alpha),np.cos(self.config.alpha)]))
+        drag = np.dot(self.total_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
+        c_lift = np.dot(self.c_force, np.array([-np.sin(self.config.alpha), np.cos(self.config.alpha)]))
+        c_drag = np.dot(self.c_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
+
+        print(f'\nFd: {drag:.2f} N/m   | Fl: {lift:.2f} N/m')
+        print(f'Cd: {c_drag:.2f}       | Cl: {c_lift:.2f}')
+
+        print(f'\nM: {self.total_moment:.2f} N.m/m  | Cm: {self.c_moment:.2f}')
 
     def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
         

@@ -9,16 +9,16 @@ chord: 0.1 # m (reference length)
 ref_position: [0, 0] # x(m), y(m)
 
 # flow conditions
-M_inf: 0.1
+M_inf: 0.15
 T_inf: 20 # deg C
 rho_inf: 1.226 # kg/m^3
 p_inf: 101325 # Pa
 
 # geometry conditions
-alpha: 0 # deg
+alpha: 6.05 # deg
 
 # solver
-control_point_offset: 1e-7 # m (for numerical stability)
+control_point_offset: 1e-7 # m (for numerical stability) ( < 1e-5 )
 
 # wake
 
@@ -30,9 +30,9 @@ control_point_offset: 1e-7 # m (for numerical stability)
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: False
+visualisation: True
 
 ###### checking elementary flows 
-# - set vertices to (in __init__): self.vertices = np.array([[0.075, 0], [0.025, 0]]) ##################
-# - set strengths to (in solve): self.source_strengths = np.array([1]) ############
+# - set geo_file to "Geometries/test_flows.dat"
 # - set M_inf to 0
+# - set strengths to (in solve): self.source_strengths = np.array([1]) ############
