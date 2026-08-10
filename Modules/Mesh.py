@@ -54,20 +54,7 @@ class Mesh:
 
     
     # ================ Elementary flows =================== #
-    def getPointSourceVelocity(self, source_point, sample_point, strength):
-        distance = np.sqrt((sample_point[0] - source_point[0])**2 + (sample_point[1] - source_point[1])**2)
-        u = strength/(2*np.pi) * (sample_point[0] - source_point[0])/distance
-        v = strength/(2*np.pi) * (sample_point[1] - source_point[1])/distance
-        return u, v
-    
-    def getPointSourcesVelocity(self, sample_point):
-        ut = 0; vt = 0
-        for i in range(self.N):
-            u, v = self.getPointSourceVelocity(self.control_points[i], sample_point, self.source_strengths[i])
-            ut += u
-            vt += v
-        return ut, vt
-    
+     
     def getConstantSourcePanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
 
         L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
@@ -100,36 +87,6 @@ class Mesh:
         ut = 0; vt = 0
         for i in range(self.N):
             u, v = self.getConstantSourcePanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, self.source_strengths[i])
-            ut += u
-            vt += v
-        return ut, vt
-
-    def getConstantDoubletPanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
-
-        L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
-        phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
-
-        dx = sample_point[0] - vertex_1[0]
-        dy = sample_point[1] - vertex_1[1]
-
-        xl = dx * np.cos(phi) + dy * np.sin(phi)
-        yl = -dx * np.sin(phi) + dy * np.cos(phi)
-
-        r1_2 = xl**2 + yl**2 # distance from vertex 1
-        r2_2 = (xl-L)**2 + yl**2 # distance from vertex 2
-
-        ul = strength / (2 * np.pi) * yl * (1/r1_2 - 1/r2_2) # local horizontal velocity (along panel)
-        vl = - strength / (2 * np.pi) * (xl/r1_2 - (xl-L)/r2_2) # local vertical velocity (normal to panel)
-
-        u = ul * np.cos(phi) - vl * np.sin(phi)
-        v = ul * np.sin(phi) + vl * np.cos(phi)
-
-        return u, v
-
-    def getConstantDoubletPanelsVelocity(self, sample_point, strength=1.0):
-        ut = 0; vt = 0
-        for i in range(self.N):
-            u, v = self.getConstantVortexPanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, strength)
             ut += u
             vt += v
         return ut, vt
@@ -184,6 +141,7 @@ class Mesh:
             ut += u
             vt += v
         return ut, vt
+
 
     # =================== Preconditioning =================== #
     def computeAandb(self):
@@ -268,8 +226,8 @@ class Mesh:
 
     def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
         
-        fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0])
-        fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1])
+        fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0] )
+        fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1] )
 
         return np.array([fx, fy])
 
@@ -286,10 +244,20 @@ class Mesh:
     def viscousMoment(self):
         return 0
 
+    # ====================== Running =========================== #
+    def run(self):
+        # solve etc
+        self.computeAandb()
+        self.solve()
+
+        # analysis
+        self.calculatePressureOnPanels()
+        self.calculateForcesAndMoments()
+
 
     # ==================== Plotting ======================== #
 
-    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, vectors_percent_scale=100):
+    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, gcs=False, vectors_percent_scale=100):
         plt.plot(self.vertices[:, 0], self.vertices[:, 1], color='black', linewidth=1)
         if vertices:
             plt.scatter(self.vertices[:, 0], self.vertices[:, 1], color='black', s=3)
@@ -299,6 +267,8 @@ class Mesh:
             self.plotNormals(size=vectors_percent_scale)
         if tangents:
             self.plotTangents(size=vectors_percent_scale)
+        if gcs:
+            self.plotGlobalCoordinateSystem(size=vectors_percent_scale)
 
     def plotControlPoints(self):
         plt.scatter(self.control_points[:, 0], self.control_points[:, 1], color='red', s=3)
@@ -308,3 +278,9 @@ class Mesh:
 
     def plotTangents(self, size=100):
         plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.tangents[:, 0], self.tangents[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b')
+
+    def plotGlobalCoordinateSystem(self, size=100):
+        plt.quiver(0, 0, 1, 0, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='r') # x
+        plt.text(1.05 * size/100, 0, "x", color='r', ha='left', va='center', fontweight='bold')
+        plt.quiver(0, 0, 0, 1, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b') # y
+        plt.text(0, 1.05 * size/100, "y", color='b', ha='center', va='bottom', fontweight='bold')

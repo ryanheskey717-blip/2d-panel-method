@@ -39,6 +39,7 @@ class Config:
 
         # visualisation
         self.visualisation = self.full_data["visualisation"]
+        self.scale = self.full_data["scale"]
 
         # calculate other important values
         self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * (self.T_inf + 273.15))
@@ -102,10 +103,29 @@ class VelocityField:
         elif var == "mag":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], np.sqrt(self.v[0]**2 + self.v[1]**2), levels=50, cmap='viridis')
         elif var == "pressure":
-            contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=500, cmap='viridis', vmin=-1, vmax=1)
+            contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=500, cmap='viridis')
         else:
             print("\nWarning!: No valid variable selected for contour plot.\n")
             return
         
         if colorbar:
             plt.colorbar(contour, label=var)
+    
+class Visualisation:
+    def __init__(self, config, mesh):
+        
+        self.velocity_field = VelocityField((-0.02, 0.12), (-0.07, 0.07), 100, 100, mesh, config) # (-0.001, 0.001), (-0.001, 0.001)
+        self.config = config
+        self.mesh = mesh
+
+    def plot(self):
+        plt.figure()
+        self.velocity_field.plotContour('pressure')
+        #velocity_field.plotStreamlines(colour='velocity', density=2)
+        self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, gcs=True, vectors_percent_scale=1)
+        plt.axis('scaled')
+        #plt.show()
+
+        plt.figure()
+        plt.plot(self.mesh.cp.flatten())
+        plt.show()

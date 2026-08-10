@@ -4,9 +4,9 @@
 verbose: True
 
 # input
-geo_file: "Geometries/naca0012_100.dat"
-chord: 0.1 # m (reference length)
-ref_position: [0, 0] # x(m), y(m)
+geo_file: "Geometries/naca0012_20.dat"
+chord: 1.0 # m (reference length)
+ref_position: [0.25, 0] # x(m), y(m)
 
 # flow conditions
 M_inf: 0.15
@@ -15,7 +15,7 @@ rho_inf: 1.226 # kg/m^3
 p_inf: 101325 # Pa
 
 # geometry conditions
-alpha: 6.05 # deg
+alpha: -5 # deg
 
 # solver
 control_point_offset: 1e-7 # m (for numerical stability) ( < 1e-5 )
@@ -31,6 +31,7 @@ pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
 visualisation: True
+scale: 'auto'
 
 ###### checking elementary flows 
 # - set geo_file to "Geometries/test_flows.dat"
