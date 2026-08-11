@@ -10,6 +10,9 @@ import Modules.General as General
 
 class Mesh:
     def __init__(self, config):
+        # record start time
+        self.start_time = time.time()
+
         # ============== Input Values ================ #
         self.config = config
 
@@ -222,8 +225,10 @@ class Mesh:
     # =================== Printing ====================== #
     def printInitial(self):
         print( '')
-        print( '2D Panel Method for Airfoils')
-        print( '    Ryan Heskey')
+        print( '~' * 60)
+        print( '2D Panel Method for Airfoils'.center(60))
+        print( '    Ryan Heskey'.center(60))
+        print( '~' * 60)
         print( '')
         print( 'Input:')
         print(f'    Recieved Geometry File: {self.config.geo_file} ({len(self.vertices)} Vertices)')
@@ -231,18 +236,18 @@ class Mesh:
         print(f'    Pressure Calculation Mode: {self.config.pressure_calculation}')
         print( '')
         print( 'Setup:')
-        print(f'    Creating Mesh ...', end='')
+        print(f'    Creating Mesh ...', end='', flush=True)
         self.meshing_start_time = time.time()
     
     def printAfterSetup(self):
         print(f' Done ({time.time() - self.meshing_start_time:.2f} s)')
         print( '')
-        print( 'Solving ...', end='')
+        print( 'Solving ...', end='', flush=True)
         self.solving_start_time = time.time()
 
     def printAfterSolving(self):
         print(f' Done ({time.time() - self.solving_start_time:.2f} s)')
-        print( 'Calculating Forces ...', end='')
+        print( 'Calculating Forces ...', end='', flush=True)
         self.forces_start_time = time.time()
     
     def printForcesResults(self):
@@ -258,17 +263,17 @@ class Mesh:
         print(f'    Cm: {self.c_moment:.3f} ({self.total_moment:.2f} N.m/m) around (x, y) = ({self.config.ref_position[0]}, {self.config.ref_position[1]}) m')
         print( '')
         if self.config.write_to_file:
-            print( 'Writing to File ...', end='')
+            print( 'Writing to File ...', end='', flush=True)
             self.write_start_time = time.time()
         elif self.config.visualisation:
-            print( 'Creating Velocity Field for Visualisation ...', end='')
+            print( 'Creating Velocity Field for Visualisation ...', end='', flush=True)
             self.visual_start_time = time.time()
     
     def printAfterWriting(self):
         print(f' Done ({time.time() - self.write_start_time:.2f} s)')
         print( '')
         if self.config.visualisation:
-            print( 'Creating Velocity Field for Visualisation ...', end='')
+            print( 'Creating Velocity Field for Visualisation ...', end='', flush=True)
             self.visual_start_time = time.time()
     
     def printAfterVelField(self):
@@ -276,5 +281,9 @@ class Mesh:
         print( '')
     
     def printFinal(self):
-        print(f'Exiting ... Done')
+        print( 'Exiting ... Done')
+        print( '')
+        print(f'Total Runtime: {time.time() - self.start_time:.3f} s')
+        print( '')
+        print( '~' * 60)
         print( '')

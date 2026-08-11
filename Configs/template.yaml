@@ -31,7 +31,7 @@ control_point_offset: 1.0e-7 # m (for numerical stability) ( < 1e-5 )
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: True
+visualisation: False
 scale: 'auto'
 
 # output
