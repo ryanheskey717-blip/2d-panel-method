@@ -5,6 +5,8 @@ import yaml
 import numpy as np
 import matplotlib.pyplot as plt
 
+import Modules.ElementaryFlows as flows
+
 # ==================== Loading =================== #
 
 # load and store config
@@ -27,6 +29,7 @@ class Config:
         self.M_inf = self.full_data["M_inf"]
         self.T_inf = self.full_data["T_inf"]
         self.rho_inf = self.full_data["rho_inf"]
+        self.mu_inf = self.full_data["mu_inf"]
         self.p_inf = self.full_data["p_inf"]
 
         self.alpha = np.deg2rad(self.full_data["alpha"])
@@ -41,12 +44,16 @@ class Config:
         self.visualisation = self.full_data["visualisation"]
         self.scale = self.full_data["scale"]
 
+        # output
+        self.write_to_file = self.full_data["write_to_file"]
+
         # calculate other important values
         self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * (self.T_inf + 273.15))
         self.V_inf_vec = np.array([
             self.V_inf * np.cos(self.alpha),
             self.V_inf * np.sin(self.alpha)
         ])
+        self.Re = self.V_inf * self.chord * self.rho_inf / self.mu_inf
 
 # ==================== Analysing ========================= #
 
@@ -72,8 +79,8 @@ class VelocityField:
         # add in geometry influence
         for i in range(len(self.meshgrid[0][0, :])):
             for j in range(len(self.meshgrid[0][:, 0])):
-                u1, v1 = geo_mesh.getConstantSourcePanelsVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
-                u2, v2 = geo_mesh.getConstantVortexPanelsVelocity((self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
+                u1, v1 = flows.getConstantSourcePanelsVelocity(geo_mesh, (self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
+                u2, v2 = flows.getConstantVortexPanelsVelocity(geo_mesh, (self.meshgrid[0][j, i], self.meshgrid[1][j, i]))
                 self.v[0][j, i] += u1 + u2
                 self.v[1][j, i] += v1 + v2
 
@@ -121,7 +128,7 @@ class Visualisation:
     def plot(self):
         plt.figure()
         self.velocity_field.plotContour('pressure')
-        #velocity_field.plotStreamlines(colour='velocity', density=2)
+        self.velocity_field.plotStreamlines(colour='velocity', density=2)
         self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, gcs=True, vectors_percent_scale=1)
         plt.axis('scaled')
         #plt.show()

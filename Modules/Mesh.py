@@ -3,6 +3,10 @@
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+import time
+
+import Modules.ElementaryFlows as flows
+import Modules.General as General
 
 class Mesh:
     def __init__(self, config):
@@ -52,97 +56,6 @@ class Mesh:
         self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
         self.b = np.zeros(self.N+1)
 
-    
-    # ================ Elementary flows =================== #
-     
-    def getConstantSourcePanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
-
-        L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
-        phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
-
-        dx = sample_point[0] - vertex_1[0]
-        dy = sample_point[1] - vertex_1[1]
-
-        xl = dx * np.cos(phi) + dy * np.sin(phi)
-        yl = -dx * np.sin(phi) + dy * np.cos(phi)
-
-        r1 = np.sqrt(xl**2 + yl**2) # distance from vertex 1
-        r2 = np.sqrt((xl-L)**2 + yl**2) # distance from vertex 2
-
-        theta1 = np.atan2(yl, xl)
-        theta2 = np.atan2(yl, xl - L)
-
-        beta = theta2 - theta1 # angular width of panel from sample point
-        beta = (beta + np.pi) % (2*np.pi) - np.pi # wrap into (-pi, pi]
-
-        ul = - strength / (2 * np.pi) * np.log( r2 / r1 ) # local horizontal velocity (along panel)
-        vl = strength / (2 * np.pi) * beta # local vertical velocity (normal to panel)
-
-        u = ul * np.cos(phi) - vl * np.sin(phi)
-        v = ul * np.sin(phi) + vl * np.cos(phi)
-        
-        return u, v
-    
-    def getConstantSourcePanelsVelocity(self, sample_point):
-        ut = 0; vt = 0
-        for i in range(self.N):
-            u, v = self.getConstantSourcePanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, self.source_strengths[i])
-            ut += u
-            vt += v
-        return ut, vt
-
-    def getConstantVortexPanelVelocity(self, vertex_1, vertex_2, sample_point, strength):
-    
-        L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
-        phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
-
-        dx = sample_point[0] - vertex_1[0]
-        dy = sample_point[1] - vertex_1[1]
-
-        xl = dx * np.cos(phi) + dy * np.sin(phi)
-        yl = -dx * np.sin(phi) + dy * np.cos(phi)
-
-        r1 = np.sqrt(xl**2 + yl**2) # distance from vertex 1
-        r2 = np.sqrt((xl-L)**2 + yl**2) # distance from vertex 2
-
-        theta1 = np.atan2(yl, xl)
-        theta2 = np.atan2(yl, xl - L)
-
-        beta = theta2 - theta1 # angular width of panel from sample point
-        beta = (beta + np.pi) % (2*np.pi) - np.pi # wrap into (-pi, pi]
-
-        ul = 0; vl = 0
-        if xl >= 0 and xl <= L:
-            if yl <= 1e-5 and yl > 0:
-                ul = - strength / 2
-            elif yl >= -1e-5 and yl < 0:
-                ul = strength / 2
-            elif yl == 0:
-                ul = 0
-            else:
-                ul = - strength / (2 * np.pi) * beta # local horizontal velocity (along panel)
-            vl = strength / (2 * np.pi) * np.log( r1 / r2 ) # local vertical velocity (normal to panel)
-        else:
-            ul = - strength / (2 * np.pi) * beta # local horizontal velocity (along panel)
-            vl = strength / (2 * np.pi) * np.log( r1 / r2 ) # local vertical velocity (normal to panel)
-
-        u = ul * np.cos(phi) - vl * np.sin(phi)
-        v = ul * np.sin(phi) + vl * np.cos(phi)
-        
-        return u, v
-    
-    def getConstantVortexPanelsVelocity(self, sample_point, strength=None):
-        ut = 0; vt = 0
-        for i in range(self.N):
-            if strength is None:
-                u, v = self.getConstantVortexPanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, self.vortex_strength)
-            else:
-                u, v = self.getConstantVortexPanelVelocity(self.vertices[i], self.vertices[i+1], sample_point, strength)
-            ut += u
-            vt += v
-        return ut, vt
-
-
     # =================== Preconditioning =================== #
     def computeAandb(self):
 
@@ -150,24 +63,24 @@ class Mesh:
         for i in range(self.N): # control point
             for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
                 if j == self.N: # vortex influence
-                    u, v = self.getConstantVortexPanelsVelocity(self.control_points[i], strength=1.0)
+                    u, v = flows.getConstantVortexPanelsVelocity(self, self.control_points[i], strength=1.0)
                     self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
                 else:
                     if i == j: # source self-influence
                         self.A[i, j] = 0.5
                     else:
-                        u, v = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
+                        u, v = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
                         self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
 
         # section of A relating to kutta condition (these find tangential influences)
         for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
             if j == self.N: # vortex influence
-                u1, v1 = self.getConstantVortexPanelsVelocity(self.control_points[0], strength=1.0)  # at upper TE control point
-                u2, v2 = self.getConstantVortexPanelsVelocity(self.control_points[-1], strength=1.0) # at lower TE control point
+                u1, v1 = flows.getConstantVortexPanelsVelocity(self, self.control_points[0], strength=1.0)  # at upper TE control point
+                u2, v2 = flows.getConstantVortexPanelsVelocity(self, self.control_points[-1], strength=1.0) # at lower TE control point
                 self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
             else:
-                u1, v1 = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[0], strength=1.0)  # at upper TE control point
-                u2, v2 = self.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[-1], strength=1.0) # at lower TE control point
+                u1, v1 = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[0], strength=1.0)  # at upper TE control point
+                u2, v2 = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[-1], strength=1.0) # at lower TE control point
                 self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
 
         # RHS
@@ -190,7 +103,7 @@ class Mesh:
     def calculateTangentialVelocityAtControlPoints(self):
         self.velocity_tangent_at_control_points = np.zeros(self.N)
         for i in range(self.N): # control point
-            total_vel = self.config.V_inf_vec + self.getConstantSourcePanelsVelocity(self.control_points[i]) + self.getConstantVortexPanelsVelocity(self.control_points[i])
+            total_vel = self.config.V_inf_vec + flows.getConstantSourcePanelsVelocity(self, self.control_points[i]) + flows.getConstantVortexPanelsVelocity(self, self.control_points[i])
             self.velocity_tangent_at_control_points[i] = np.dot(total_vel, self.tangents[i])
 
     def calculatePressureOnPanels(self):
@@ -211,18 +124,10 @@ class Mesh:
         self.c_force = self.total_force / ( 0.5 * self.config.rho_inf * self.config.V_inf ** 2 * self.config.chord)
         self.c_moment = self.total_moment / ( 0.5 * self.config.rho_inf * self.config.V_inf ** 2 * self.config.chord ** 2)
 
-        print(f'\nFx: {self.total_force[0]:.2f} N/m | Fy: {self.total_force[1]:.2f} N/m')
-        print(f'Cx: {self.c_force[0]:.2f}      | Cy: {self.c_force[1]:.2f}')
-
-        lift = np.dot(self.total_force, np.array([-np.sin(self.config.alpha),np.cos(self.config.alpha)]))
-        drag = np.dot(self.total_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
-        c_lift = np.dot(self.c_force, np.array([-np.sin(self.config.alpha), np.cos(self.config.alpha)]))
-        c_drag = np.dot(self.c_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
-
-        print(f'\nFd: {drag:.2f} N/m   | Fl: {lift:.2f} N/m')
-        print(f'Cd: {c_drag:.2f}       | Cl: {c_lift:.2f}')
-
-        print(f'\nM: {self.total_moment:.2f} N.m/m  | Cm: {self.c_moment:.2f}')
+        self.lift = np.dot(self.total_force, np.array([-np.sin(self.config.alpha),np.cos(self.config.alpha)]))
+        self.drag = np.dot(self.total_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
+        self.c_lift = np.dot(self.c_force, np.array([-np.sin(self.config.alpha), np.cos(self.config.alpha)]))
+        self.c_drag = np.dot(self.c_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
 
     def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
         
@@ -246,13 +151,42 @@ class Mesh:
 
     # ====================== Running =========================== #
     def run(self):
-        # solve etc
-        self.computeAandb()
-        self.solve()
+        # Initial setup (happens automatically in __init__)
+        if self.config.verbose:
+            self.printInitial()
 
-        # analysis
+        # Solve etc.
+        self.computeAandb()
+        if self.config.verbose:
+            self.printAfterSetup()
+
+        self.solve()
+        if self.config.verbose:
+            self.printAfterSolving()
+
+        # Solution Analysis
         self.calculatePressureOnPanels()
         self.calculateForcesAndMoments()
+        if self.config.verbose:
+            self.printForcesResults()
+
+        # Output
+        if self.config.write_to_file:
+            ##### add writing here
+            if self.config.verbose:
+                self.printAfterWriting()
+        
+        # Visualisation
+        if self.config.visualisation:
+            self.visualisation = General.Visualisation(self.config, self)
+            if self.config.verbose:
+                self.printAfterVelField()
+            self.visualisation.plot()
+            ###### TODO: auto size arrows
+
+        # Exit
+        if self.config.verbose:
+            self.printFinal()
 
 
     # ==================== Plotting ======================== #
@@ -284,3 +218,63 @@ class Mesh:
         plt.text(1.05 * size/100, 0, "x", color='r', ha='left', va='center', fontweight='bold')
         plt.quiver(0, 0, 0, 1, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b') # y
         plt.text(0, 1.05 * size/100, "y", color='b', ha='center', va='bottom', fontweight='bold')
+
+    # =================== Printing ====================== #
+    def printInitial(self):
+        print( '')
+        print( '2D Panel Method for Airfoils')
+        print( '    Ryan Heskey')
+        print( '')
+        print( 'Input:')
+        print(f'    Recieved Geometry File: {self.config.geo_file} ({len(self.vertices)} Vertices)')
+        print(f'    Non-Dimensional Numbers: Re = {self.config.Re:.0f}, M = {self.config.M_inf}')
+        print(f'    Pressure Calculation Mode: {self.config.pressure_calculation}')
+        print( '')
+        print( 'Setup:')
+        print(f'    Creating Mesh ...', end='')
+        self.meshing_start_time = time.time()
+    
+    def printAfterSetup(self):
+        print(f' Done ({time.time() - self.meshing_start_time:.2f} s)')
+        print( '')
+        print( 'Solving ...', end='')
+        self.solving_start_time = time.time()
+
+    def printAfterSolving(self):
+        print(f' Done ({time.time() - self.solving_start_time:.2f} s)')
+        print( 'Calculating Forces ...', end='')
+        self.forces_start_time = time.time()
+    
+    def printForcesResults(self):
+        print(f' Done ({time.time() - self.forces_start_time:.2f} s)')
+        print( '')
+        print( 'Results Summary:')
+        print(f'    Cx: {self.c_force[0]:.3f} ({self.total_force[0]:.1f} N/m)')
+        print(f'    Cy: {self.c_force[1]:.3f} ({self.total_force[1]:.1f} N/m)')
+        print( '')
+        print(f'    Cd: {self.c_drag:.3f} ({self.drag:.2f} N/m)')
+        print(f'    Cl: {self.c_lift:.3f} ({self.lift:.2f} N/m)')
+        print( '')
+        print(f'    Cm: {self.c_moment:.3f} ({self.total_moment:.2f} N.m/m) around (x, y) = ({self.config.ref_position[0]}, {self.config.ref_position[1]}) m')
+        print( '')
+        if self.config.write_to_file:
+            print( 'Writing to File ...', end='')
+            self.write_start_time = time.time()
+        elif self.config.visualisation:
+            print( 'Creating Velocity Field for Visualisation ...', end='')
+            self.visual_start_time = time.time()
+    
+    def printAfterWriting(self):
+        print(f' Done ({time.time() - self.write_start_time:.2f} s)')
+        print( '')
+        if self.config.visualisation:
+            print( 'Creating Velocity Field for Visualisation ...', end='')
+            self.visual_start_time = time.time()
+    
+    def printAfterVelField(self):
+        print(f' Done ({time.time() - self.visual_start_time:.2f} s)')
+        print( '')
+    
+    def printFinal(self):
+        print(f'Exiting ... Done')
+        print( '')

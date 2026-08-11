@@ -15,9 +15,3 @@ mesh = Mesh(config)
 
 # run panel method
 mesh.run()
-
-# visualisation
-if config.visualisation:
-    visualisation = General.Visualisation(config, mesh)
-    visualisation.plot()
-    # TODO: auto size arrows
