@@ -14,4 +14,4 @@ config = General.Config(input_file)
 mesh = Mesh(config)
 
 # run panel method
-mesh.run()
+mesh.run_case()

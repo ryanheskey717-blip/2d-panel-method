@@ -4,14 +4,18 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+from copy import deepcopy
 
 import Modules.ElementaryFlows as flows
 import Modules.General as General
 
 class Mesh:
     def __init__(self, config):
-        # record start time
+        # record start time and initialise
         self.start_time = time.time()
+        self.last_time_check = 0
+        self.converged = False
+        self.iteration = 1
 
         # ============== Input Values ================ #
         self.config = config
@@ -20,11 +24,7 @@ class Mesh:
         self.vertices = np.loadtxt(self.config.geo_file, skiprows=1)
         self.vertices *= self.config.chord
 
-        # ============ Get Mesh Parameters ============ #
-        self.getMeshParameters(vertices=self.vertices)
-
-
-    def getMeshParameters(self, vertices):
+    def getMeshParameters(self, vertices, first=False):
         # ============= Calculate control points, normals, tangents and lengths ============== #
         self.normals = []
         for i in range(len(vertices) - 1):
@@ -55,9 +55,19 @@ class Mesh:
         self.control_points += self.normals * self.config.control_point_offset # offset a bit from surface
 
         # ================= Preallocate Arrays ==================== #
-        self.N = len(self.control_points)
-        self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
-        self.b = np.zeros(self.N+1)
+        if first:
+            self.N = len(self.control_points)
+            self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
+            self.b = np.zeros(self.N+1)
+            self.delta_star = np.zeros(self.N) # BL computed at each control point
+    
+    def saveGeometryInfo(self):
+        self.getMeshParameters(self.vertices, first=True)
+        self.geo_vertices = deepcopy(self.vertices)
+        self.geo_normals = deepcopy(self.normals)
+        self.geo_tangents = deepcopy(self.tangents)
+        self.geo_lengths = deepcopy(self.lengths)
+        self.geo_control_points = deepcopy(self.control_points)
 
     # =================== Preconditioning =================== #
     def computeAandb(self):
@@ -94,12 +104,34 @@ class Mesh:
                 self.b[i] = - np.dot(self.config.V_inf_vec, self.normals[i])
 
 
-    # ====================== Solving ========================= #
-    def solve(self):
+    # ================== Inviscid Solving ===================== #
+    def solveInviscid(self):
         x = np.linalg.solve(self.A, self.b)
         self.source_strengths = x[:-1]
         self.vortex_strength = x[-1]
+    
+    # ================= Viscous Solving ==================== #
+    def solveViscous(self):
+        
+        if self.iteration == 1: # use blasius solution
+            pass
+        else:
+            pass
 
+    def updateBLThickness(self):
+        #### TODO: Change to using control points to calc d* and then find new vertirces
+        if self.iteration == 1: # blasis displacement thickness
+            self.delta_star = 1.72 * self.geo_control_points[:, 0] / np.sqrt(self.config.V_inf * (self.geo_control_points[:, 0]+1e-10) / self.config.nu_inf) # +1e-10 for when x=0, make sure it returns zero
+        else:
+            pass
+
+        # interpolate
+        #### TODO: incorporate change in y here: im think find dist to +1/-1 cps from vertex, then interpolate delta star based of ratio of dists
+        #delta_star_at_vertices = np.interp(self.geo_vertices[:, 0], self.geo_control_points[:, 0], self.delta_star)
+        
+        # update vertices
+        #### TODO: calculated geo_norms_at_verts in saveGeometryInfo() using similar method to above
+        #self.vertices = self.geo_vertices + delta_star_at_vertices * self.geo_normals_at_vertices
 
     # ================= Flow Properties =================== #
 
@@ -134,8 +166,8 @@ class Mesh:
 
     def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
         
-        fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0] )
-        fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1] )
+        fx = np.sum( - self.pressure * self.lengths * self.geo_normals[:, 0] )
+        fy = np.sum( - self.pressure * self.lengths * self.geo_normals[:, 1] )
 
         return np.array([fx, fy])
 
@@ -144,8 +176,8 @@ class Mesh:
 
     def pressureMoment(self):
 
-        r = self.control_points - self.config.ref_position
-        forces = - self.pressure[:, None] * self.normals * self.lengths[:, None]
+        r = self.geo_control_points - self.config.ref_position
+        forces = - self.pressure[:, None] * self.geo_normals * self.geo_lengths[:, None]
 
         return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
 
@@ -154,73 +186,102 @@ class Mesh:
 
     # ====================== Running =========================== #
     def run(self):
-        # Initial setup (happens automatically in __init__)
         if self.config.verbose:
-            self.printInitial()
+            self.printNewCase()
 
-        # Solve etc.
-        self.computeAandb()
+        # Solve viscous (blasius first iteration)
+        self.solveViscous()
+        self.updateBLThickness()
+        if self.config.verbose:
+            self.printAfterViscousSolve()
+
+        # calculate mesh parameters
+        self.getMeshParameters(vertices=self.vertices)
         if self.config.verbose:
             self.printAfterSetup()
 
-        self.solve()
+        # Solve inviscid
+        self.computeAandb()
         if self.config.verbose:
-            self.printAfterSolving()
+            self.printAfterPopulation()
+
+        self.solveInviscid()
+        if self.config.verbose:
+            self.printAfterInviscidSolve()
 
         # Solution Analysis
         self.calculatePressureOnPanels()
         self.calculateForcesAndMoments()
+        self.checkConvergence()
         if self.config.verbose:
             self.printForcesResults()
 
+        #### TODO: write convergence to file here?
+
+    def run_case(self):
+
+        # Initial setup
+        self.saveGeometryInfo()
+        if self.config.verbose:
+            self.printInitial()
+
+        # main iteration loop
+        while not self.converged:
+            self.run()
+
         # Output
         if self.config.write_to_file:
+            if self.config.verbose:
+                self.printBeforeWriting()
             ##### add writing here
             if self.config.verbose:
                 self.printAfterWriting()
         
         # Visualisation
         if self.config.visualisation:
+            if self.config.verbose:
+                self.printBeforeVelField()
             self.visualisation = General.Visualisation(self.config, self)
             if self.config.verbose:
                 self.printAfterVelField()
             self.visualisation.plot()
             ###### TODO: auto size arrows
-
+        
         # Exit
         if self.config.verbose:
             self.printFinal()
 
+    def checkConvergence(self):
+        
+        if not self.config.run_till_converged and self.iteration == 1:
+            self.converged = True
+        else:
+            raise('success')
+
 
     # ==================== Plotting ======================== #
 
-    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, gcs=False, vectors_percent_scale=100):
-        plt.plot(self.vertices[:, 0], self.vertices[:, 1], color='black', linewidth=1)
+    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=False, gcs=False, vectors_percent_scale=100):
+        plt.plot(self.geo_vertices[:, 0], self.geo_vertices[:, 1], color='black', linewidth=1)
         if vertices:
-            plt.scatter(self.vertices[:, 0], self.vertices[:, 1], color='black', s=3)
+            plt.scatter(self.geo_vertices[:, 0], self.geo_vertices[:, 1], color='black', s=3)
         if control_points:
-            self.plotControlPoints()
+            plt.scatter(self.geo_control_points[:, 0], self.geo_control_points[:, 1], color='red', s=3)
         if normals:
-            self.plotNormals(size=vectors_percent_scale)
+            plt.quiver(self.geo_control_points[:, 0], self.geo_control_points[:, 1], self.geo_normals[:, 0], self.geo_normals[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='g')
         if tangents:
-            self.plotTangents(size=vectors_percent_scale)
+            plt.quiver(self.geo_control_points[:, 0], self.geo_control_points[:, 1], self.geo_tangents[:, 0], self.geo_tangents[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b')
+        if boundary_layer:
+            plt.plot(self.geo_control_points[:, 0] + self.delta_star * self.geo_normals[:, 0], self.geo_control_points[:, 1] + self.delta_star * self.geo_normals[:, 1], color='red', linewidth=1)
         if gcs:
             self.plotGlobalCoordinateSystem(size=vectors_percent_scale)
-
-    def plotControlPoints(self):
-        plt.scatter(self.control_points[:, 0], self.control_points[:, 1], color='red', s=3)
-    
-    def plotNormals(self, size=100):
-        plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.normals[:, 0], self.normals[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='g')
-
-    def plotTangents(self, size=100):
-        plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.tangents[:, 0], self.tangents[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b')
 
     def plotGlobalCoordinateSystem(self, size=100):
         plt.quiver(0, 0, 1, 0, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='r') # x
         plt.text(1.05 * size/100, 0, "x", color='r', ha='left', va='center', fontweight='bold')
         plt.quiver(0, 0, 0, 1, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b') # y
         plt.text(0, 1.05 * size/100, "y", color='b', ha='center', va='bottom', fontweight='bold')
+    
 
     # =================== Printing ====================== #
     def printInitial(self):
@@ -235,49 +296,66 @@ class Mesh:
         print(f'    Non-Dimensional Numbers: Re = {self.config.Re:.0f}, M = {self.config.M_inf}')
         print(f'    Pressure Calculation Mode: {self.config.pressure_calculation}')
         print( '')
-        print( 'Setup:')
-        print(f'    Creating Mesh ...', end='', flush=True)
-        self.meshing_start_time = time.time()
+    
+    def printNewCase(self):
+        print( '~' * 22, f' Iteration {self.iteration:.0f} ', '~' * 23)
+        print( '')
+        print( 'Solving Viscous ...', end='', flush=True)
+        self.last_time_check = time.time()
+
+    def printAfterViscousSolve(self):
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
+        print( '')
+        print(f'Creating Mesh ...', end='', flush=True)
+        self.last_time_check = time.time()
     
     def printAfterSetup(self):
-        print(f' Done ({time.time() - self.meshing_start_time:.2f} s)')
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        print( 'Solving ...', end='', flush=True)
-        self.solving_start_time = time.time()
+        print( 'Populating A and b ...', end='', flush=True)
+        self.last_time_check = time.time()
 
-    def printAfterSolving(self):
-        print(f' Done ({time.time() - self.solving_start_time:.2f} s)')
+    def printAfterPopulation(self):
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
+        print( '')
+        print( 'Solving Inviscid ...', end='', flush=True)
+        self.last_time_check = time.time()
+
+    def printAfterInviscidSolve(self):
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
+        print( '')
         print( 'Calculating Forces ...', end='', flush=True)
-        self.forces_start_time = time.time()
+        self.last_time_check = time.time()
     
     def printForcesResults(self):
-        print(f' Done ({time.time() - self.forces_start_time:.2f} s)')
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        print( 'Results Summary:')
-        print(f'    Cx: {self.c_force[0]:.3f} ({self.total_force[0]:.1f} N/m)')
-        print(f'    Cy: {self.c_force[1]:.3f} ({self.total_force[1]:.1f} N/m)')
+        print(f'Results Summary: ({"Converged" if self.converged else "Not Converged"})')
+        print(f'    Cx: {self.c_force[0]:.3f} ({self.total_force[0]:.2f} N/m)')
+        print(f'    Cy: {self.c_force[1]:.3f} ({self.total_force[1]:.2f} N/m)')
         print( '')
         print(f'    Cd: {self.c_drag:.3f} ({self.drag:.2f} N/m)')
         print(f'    Cl: {self.c_lift:.3f} ({self.lift:.2f} N/m)')
         print( '')
         print(f'    Cm: {self.c_moment:.3f} ({self.total_moment:.2f} N.m/m) around (x, y) = ({self.config.ref_position[0]}, {self.config.ref_position[1]}) m')
         print( '')
-        if self.config.write_to_file:
-            print( 'Writing to File ...', end='', flush=True)
-            self.write_start_time = time.time()
-        elif self.config.visualisation:
-            print( 'Creating Velocity Field for Visualisation ...', end='', flush=True)
-            self.visual_start_time = time.time()
+        print( '~' * 60)
+        print( '')
+
+    def printBeforeWriting(self):
+        print( 'Writing results to file ...', end='', flush=True)
+        self.last_time_check = time.time()
     
     def printAfterWriting(self):
-        print(f' Done ({time.time() - self.write_start_time:.2f} s)')
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        if self.config.visualisation:
-            print( 'Creating Velocity Field for Visualisation ...', end='', flush=True)
-            self.visual_start_time = time.time()
+    
+    def printBeforeVelField(self):
+        print( 'Creating Visualisation ...', end='', flush=True)
+        self.last_time_check = time.time()
     
     def printAfterVelField(self):
-        print(f' Done ({time.time() - self.visual_start_time:.2f} s)')
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
     
     def printFinal(self):

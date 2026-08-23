@@ -30,12 +30,21 @@ class Config:
         self.T_inf = self.full_data["T_inf"]
         self.rho_inf = self.full_data["rho_inf"]
         self.mu_inf = self.full_data["mu_inf"]
+        self.nu_inf = self.mu_inf / self.rho_inf
         self.p_inf = self.full_data["p_inf"]
 
         self.alpha = np.deg2rad(self.full_data["alpha"])
 
         # solver
         self.control_point_offset = float(self.full_data["control_point_offset"])
+        self.convergence_criterion = float(self.full_data["convergence_criterion"])
+        if self.convergence_criterion == 0.0: # single iteration
+            self.run_till_converged = False
+        else: # let run until convergence
+            self.run_till_converged = True
+        
+        # turbulence/viscous
+        self.inflation_layers = self.full_data["inflation_layers"]
 
         # flow properties
         self.pressure_calculation = self.full_data["pressure_calculation"]
@@ -45,7 +54,8 @@ class Config:
         self.scale = self.full_data["scale"]
 
         # output
-        self.write_to_file = self.full_data["write_to_file"]
+        self.write_to_file = self.full_data["output"]["write_to_file"]
+        self.out_coeff_file = self.full_data["output"]["coefficients"]
 
         # calculate other important values
         self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * (self.T_inf + 273.15))
@@ -129,10 +139,10 @@ class Visualisation:
         plt.figure()
         self.velocity_field.plotContour('pressure')
         self.velocity_field.plotStreamlines(colour='velocity', density=2)
-        self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, gcs=True, vectors_percent_scale=1)
+        self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=True, gcs=True, vectors_percent_scale=1)
         plt.axis('scaled')
         #plt.show()
 
-        plt.figure()
-        plt.plot(self.mesh.cp.flatten())
+        #plt.figure()
+        #plt.plot(self.mesh.cp.flatten())
         plt.show()
