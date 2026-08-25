@@ -4,7 +4,7 @@
 verbose: True
 
 # input
-geo_file: "Geometries/naca0012_200.dat"
+geo_file: "Geometries/naca0012_20.dat"
 chord: 0.1 # m (reference length)
 ref_position: [0, 0] # x(m), y(m)
 
@@ -24,12 +24,15 @@ convergence_criterion: 0 # 0: single iteration. else: num for change in coeffs (
 
 # turbulence/viscous
 inflation_layers: 10
+wake_starting_index: -1 # 0 for start, -1 for end
+wake_points: 10 # number of points in wake
+wake_length: 0.02 # m
 
 # flow properties
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: False
+visualisation: True
 scale: 'auto'
 
 # output

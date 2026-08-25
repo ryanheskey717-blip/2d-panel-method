@@ -45,6 +45,9 @@ class Config:
         
         # turbulence/viscous
         self.inflation_layers = self.full_data["inflation_layers"]
+        self.wake_starting_index = int(self.full_data["wake_starting_index"])
+        self.wake_points = int(self.full_data["wake_points"])
+        self.wake_length = float(self.full_data["wake_length"])
 
         # flow properties
         self.pressure_calculation = self.full_data["pressure_calculation"]
@@ -131,7 +134,7 @@ class VelocityField:
 class Visualisation:
     def __init__(self, config, mesh):
         
-        self.velocity_field = VelocityField((-0.02, 0.12), (-0.07, 0.07), 100, 100, mesh, config) # (-0.001, 0.001), (-0.001, 0.001)
+        self.velocity_field = VelocityField((-0.02, 0.14), (-0.07, 0.07), 100, 100, mesh, config) # (0.095, 0.105), (-0.005, 0.005)
         self.config = config
         self.mesh = mesh
 

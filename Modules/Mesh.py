@@ -2,6 +2,7 @@
 
 import csv
 import numpy as np
+from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import time
 from copy import deepcopy
@@ -60,6 +61,7 @@ class Mesh:
             self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
             self.b = np.zeros(self.N+1)
             self.delta_star = np.zeros(self.N) # BL computed at each control point
+            self.updateWakePoints(first)
     
     def saveGeometryInfo(self):
         self.getMeshParameters(self.vertices, first=True)
@@ -68,6 +70,8 @@ class Mesh:
         self.geo_tangents = deepcopy(self.tangents)
         self.geo_lengths = deepcopy(self.lengths)
         self.geo_control_points = deepcopy(self.control_points)
+        self.geo_normals_at_vertices = self.interpControlPointsToVertices(self.geo_normals)
+        self.geo_normals_at_vertices /= np.linalg.norm(self.geo_normals_at_vertices, axis=1, keepdims=True)
 
     # =================== Preconditioning =================== #
     def computeAandb(self):
@@ -119,19 +123,50 @@ class Mesh:
             pass
 
     def updateBLThickness(self):
-        #### TODO: Change to using control points to calc d* and then find new vertirces
         if self.iteration == 1: # blasis displacement thickness
             self.delta_star = 1.72 * self.geo_control_points[:, 0] / np.sqrt(self.config.V_inf * (self.geo_control_points[:, 0]+1e-10) / self.config.nu_inf) # +1e-10 for when x=0, make sure it returns zero
         else:
-            pass
+            pass #### TODO: add proper boundary layer solving here (how?)
 
         # interpolate
-        #### TODO: incorporate change in y here: im think find dist to +1/-1 cps from vertex, then interpolate delta star based of ratio of dists
-        #delta_star_at_vertices = np.interp(self.geo_vertices[:, 0], self.geo_control_points[:, 0], self.delta_star)
+        self.delta_star_at_vertices = self.interpControlPointsToVertices(self.delta_star)
         
         # update vertices
-        #### TODO: calculated geo_norms_at_verts in saveGeometryInfo() using similar method to above
-        #self.vertices = self.geo_vertices + delta_star_at_vertices * self.geo_normals_at_vertices
+        self.vertices = self.geo_vertices + self.delta_star_at_vertices[:, np.newaxis] * self.geo_normals_at_vertices
+    
+    def interpControlPointsToVertices(self, cp_vals):
+        # find distances of vertices to control points
+        outs = []
+        dist1 = 0; dist2 = 0; v1 = 0; v2 = 0
+        for i in range(len(cp_vals)+1):
+            if i == 0: # first vertex
+                dist1 = self.lengths[-1] / 2
+                dist2 = self.lengths[i] / 2
+                v1 = cp_vals[-1]
+                v2 = cp_vals[i]
+            elif i == len(cp_vals): # last vertex
+                dist1 = self.lengths[i-1] / 2
+                dist2 = self.lengths[0] / 2
+                v1 = cp_vals[i-1]
+                v2 = cp_vals[0]
+            else:
+                dist1 = self.lengths[i-1] / 2
+                dist2 = self.lengths[i] / 2
+                v1 = cp_vals[i-1]
+                v2 = cp_vals[i]
+            w1 = 1 / dist1
+            w2 = 1 / dist2
+            outs.append((w1 * v1 + w2 * v2) / (w1 + w2))
+        outs = np.array(outs)
+        return outs
+
+    def updateWakePoints(self, first=False):
+        if first == True:
+            start_point = self.vertices[self.config.wake_starting_index]
+            self.wake_vertices = np.linspace(start_point, start_point + (self.config.wake_length, 0), self.config.wake_points) # TODO: is this better?: * self.config.V_inf_vec / self.config.V_inf
+        else:
+            pass #### TODO: calculate this based of last iters fluid flow (ensure to use geo_vertices to start)
+
 
     # ================= Flow Properties =================== #
 
@@ -200,7 +235,7 @@ class Mesh:
         if self.config.verbose:
             self.printAfterSetup()
 
-        # Solve inviscid
+        # Setup and Solve inviscid
         self.computeAandb()
         if self.config.verbose:
             self.printAfterPopulation()
@@ -263,6 +298,7 @@ class Mesh:
 
     def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=False, gcs=False, vectors_percent_scale=100):
         plt.plot(self.geo_vertices[:, 0], self.geo_vertices[:, 1], color='black', linewidth=1)
+        plt.plot(self.wake_vertices[:, 0], self.wake_vertices[:, 1], color='black', linewidth=1)
         if vertices:
             plt.scatter(self.geo_vertices[:, 0], self.geo_vertices[:, 1], color='black', s=3)
         if control_points:

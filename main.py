@@ -1,8 +1,4 @@
-# external libraries
-import numpy as np
-import matplotlib.pyplot as plt
-
-# modules
+# import modules
 import Modules.General as General
 from Modules.Mesh import Mesh
 
