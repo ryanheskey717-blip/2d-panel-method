@@ -4,7 +4,7 @@
 verbose: True
 
 # input
-geo_file: "Geometries/naca0012_20.dat"
+geo_file: "Geometries/naca0012_100.dat"
 chord: 0.1 # m (reference length)
 ref_position: [0, 0] # x(m), y(m)
 

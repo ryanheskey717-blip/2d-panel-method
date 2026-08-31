@@ -4,6 +4,7 @@
 import yaml
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
 
 import Modules.ElementaryFlows as flows
 
@@ -71,19 +72,37 @@ class Config:
 # ==================== Analysing ========================= #
 
 class VelocityField:
-    def __init__(self, xlim, ylim, nx, ny, geo_mesh, config):
+    def __init__(self, geo_mesh, config, area_type, xlim=None, ylim=None, nx=None, ny=None):
 
         # input values
         self.config = config
+        self.area_type = area_type
 
-        # get x and y coords
-        x = np.linspace(xlim[0], xlim[1], nx)
-        y = np.linspace(ylim[0], ylim[1], ny)
+        # create mesh
+        if self.area_type == 'cartesian':
+            # get coords
+            x = np.linspace(xlim[0], xlim[1], nx)
+            y = np.linspace(ylim[0], ylim[1], ny)
 
-        # get grid
-        self.meshgrid = np.meshgrid(x, y)
+            # get grid
+            self.meshgrid = np.meshgrid(x, y)
 
-        # calculate velocity at each grid poin
+        elif self.area_type == 'conformal':
+            # spacing
+            eta = np.geomspace(1, 10, ny)
+            eta = (eta - 1) / (10 - 1) * ylim
+
+            # get coords
+            x = np.zeros((len(geo_mesh.geo_control_points), ny))
+            y = np.zeros((len(geo_mesh.geo_control_points), ny))
+            for j in range(ny):
+                x[:, j] = geo_mesh.geo_control_points[:, 0] + geo_mesh.geo_normals[:, 0] * eta[j]
+                y[:, j] = geo_mesh.geo_control_points[:, 1] + geo_mesh.geo_normals[:, 1] * eta[j]
+
+            # get grid
+            self.meshgrid = (x, y)
+
+        # calculate velocity at each grid point
         # initialise with freestream velocity
         self.v = np.ones_like(self.meshgrid)
         self.v[0] *= config.V_inf_vec[0]
@@ -100,12 +119,35 @@ class VelocityField:
     # ================ Velocity Plotting ================== #
 
     def plotStreamlines(self, colour='C0', density=1):
-        if colour == 'velocity':
-            colour = np.sqrt(self.v[0]**2 + self.v[1]**2)
 
-        # plot streamlines
-        strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='inferno')
-        plt.colorbar(strm.lines)
+        if self.area_type == 'cartesian':
+            if colour == 'velocity': # colour by velocity
+                colour = np.sqrt(self.v[0]**2 + self.v[1]**2)
+            
+            # plot streamlines
+            strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='inferno')
+            plt.colorbar(strm.lines)
+
+        elif self.area_type == 'conformal':
+            x_vec = np.linspace(self.meshgrid[0].min(), self.meshgrid[0].max(), 100)
+            y_vec = np.linspace(self.meshgrid[1].min(), self.meshgrid[1].max(), 100)
+            x_cart, y_cart = np.meshgrid(x_vec, y_vec)
+            
+            # flatten
+            points = np.vstack((self.meshgrid[0].flatten(), self.meshgrid[1].flatten())).T
+            u_flat = self.v[0].flatten()
+            v_flat = self.v[1].flatten()
+            
+            # interpolate
+            u_cart = griddata(points, u_flat, (x_cart, y_cart), method='linear')
+            v_cart = griddata(points, v_flat, (x_cart, y_cart), method='linear')
+
+            if colour == 'velocity': # colour by velocity
+                colour = np.sqrt(u_cart**2 + v_cart**2)
+
+            # plot streamlines
+            strm = plt.streamplot(x_cart, y_cart, u_cart, v_cart, color=colour, linewidth=1, density=density, cmap='inferno')
+            plt.colorbar(strm.lines)
 
         # remove arrows if needed
         arrows = False
@@ -131,16 +173,24 @@ class VelocityField:
         if colorbar:
             plt.colorbar(contour, label=var)
     
+    def plotVelocityGrid(self):
+        for i in range(self.meshgrid[0].shape[0]):
+            plt.plot(self.meshgrid[0][i, :], self.meshgrid[1][i, :], color='gray', linewidth=0.5)
+        for j in range(self.meshgrid[0].shape[1]):
+            plt.plot(self.meshgrid[0][:, j], self.meshgrid[1][:, j], color='gray', linewidth=0.5)
+    
 class Visualisation:
     def __init__(self, config, mesh):
         
-        self.velocity_field = VelocityField((-0.02, 0.14), (-0.07, 0.07), 100, 100, mesh, config) # (0.095, 0.105), (-0.005, 0.005)
+        #self.velocity_field = VelocityField(mesh, config, 'cartesian', (-0.02, 0.14), (-0.07, 0.07), 100, 100) # (0.095, 0.105), (-0.005, 0.005)
+        self.velocity_field = VelocityField(mesh, config, 'conformal', ylim=0.05, ny=50)
         self.config = config
         self.mesh = mesh
 
     def plot(self):
         plt.figure()
         self.velocity_field.plotContour('pressure')
+        #self.velocity_field.plotVelocityGrid()
         self.velocity_field.plotStreamlines(colour='velocity', density=2)
         self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=True, gcs=True, vectors_percent_scale=1)
         plt.axis('scaled')
