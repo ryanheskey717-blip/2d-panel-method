@@ -166,6 +166,7 @@ class Mesh:
             self.wake_vertices = np.linspace(start_point, start_point + (self.config.wake_length, 0), self.config.wake_points) # TODO: is this better?: * self.config.V_inf_vec / self.config.V_inf
         else:
             pass #### TODO: calculate this based of last iters fluid flow (ensure to use geo_vertices to start)
+                 #### if this is done, need to update the grid calc in General.VelocityField.__init__()
 
 
     # ================= Flow Properties =================== #
