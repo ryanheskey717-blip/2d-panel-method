@@ -32,7 +32,7 @@ wake_length: 0.02 # m
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: True
+visualisation: False
 scale: 'auto'
 
 # output

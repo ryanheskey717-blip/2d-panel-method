@@ -25,54 +25,45 @@ class Mesh:
         self.vertices = np.loadtxt(self.config.geo_file, skiprows=1)
         self.vertices *= self.config.chord
 
-    def getMeshParameters(self, vertices, first=False):
+    def getMeshParameters(self, first=False):
         # ============= Calculate control points, normals, tangents and lengths ============== #
         self.normals = []
-        for i in range(len(vertices) - 1):
+        for i in range(len(self.vertices) - 1):
             self.normals.append([
-                (vertices[i+1, 1] - vertices[i, 1]),
-                -(vertices[i+1, 0] - vertices[i, 0]),
+                (self.vertices[i+1, 1] - self.vertices[i, 1]),
+                -(self.vertices[i+1, 0] - self.vertices[i, 0]),
             ])
         self.normals = np.array(self.normals)
         self.normals /= np.linalg.norm(self.normals, axis=1, keepdims=True) # normalise
 
         self.tangents = []
-        for i in range(len(vertices) - 1):
+        for i in range(len(self.vertices) - 1):
             self.tangents.append([
-                -(vertices[i+1, 0] - vertices[i, 0]),
-                -(vertices[i+1, 1] - vertices[i, 1]),
+                -(self.vertices[i+1, 0] - self.vertices[i, 0]),
+                -(self.vertices[i+1, 1] - self.vertices[i, 1]),
             ])
         self.tangents = np.array(self.tangents)
         self.lengths = np.linalg.norm(self.tangents, axis=1)
         self.tangents /= np.linalg.norm(self.tangents, axis=1, keepdims=True) # normalise
 
         self.control_points = []
-        for i in range(len(vertices) - 1):
+        for i in range(len(self.vertices) - 1):
             self.control_points.append([
-                (vertices[i, 0] + vertices[i+1, 0]) / 2, 
-                (vertices[i, 1] + vertices[i+1, 1]) / 2
+                (self.vertices[i, 0] + self.vertices[i+1, 0]) / 2, 
+                (self.vertices[i, 1] + self.vertices[i+1, 1]) / 2
             ])
         self.control_points = np.array(self.control_points)
         self.control_points += self.normals * self.config.control_point_offset # offset a bit from surface
 
         # ================= Preallocate Arrays ==================== #
-        if first:
-            self.N = len(self.control_points)
-            self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
-            self.b = np.zeros(self.N+1)
-            self.delta_star = np.zeros(self.N) # BL computed at each control point
-            self.updateWakePoints(first)
-    
-    def saveGeometryInfo(self):
-        self.getMeshParameters(self.vertices, first=True)
-        self.geo_vertices = deepcopy(self.vertices)
-        self.geo_normals = deepcopy(self.normals)
-        self.geo_tangents = deepcopy(self.tangents)
-        self.geo_lengths = deepcopy(self.lengths)
-        self.geo_control_points = deepcopy(self.control_points)
-        self.geo_normals_at_vertices = self.interpControlPointsToVertices(self.geo_normals)
-        self.geo_normals_at_vertices /= np.linalg.norm(self.geo_normals_at_vertices, axis=1, keepdims=True)
-
+        self.N = len(self.control_points)
+        self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
+        self.b = np.zeros(self.N+1)
+        self.delta_star = np.zeros(self.N) # BL computed at each control point
+        self.updateWakePoints(first=True)
+        self.normals_at_vertices = self.interpControlPointsToVertices(self.normals)
+        self.normals_at_vertices /= np.linalg.norm(self.normals_at_vertices, axis=1, keepdims=True)
+        
     # =================== Preconditioning =================== #
     def computeAandb(self):
 
@@ -124,15 +115,12 @@ class Mesh:
 
     def updateBLThickness(self):
         if self.iteration == 1: # blasis displacement thickness
-            self.delta_star = 1.72 * self.geo_control_points[:, 0] / np.sqrt(self.config.V_inf * (self.geo_control_points[:, 0]+1e-10) / self.config.nu_inf) # +1e-10 for when x=0, make sure it returns zero
+            self.delta_star = 1.72 * self.control_points[:, 0] / np.sqrt(self.config.V_inf * (self.control_points[:, 0]+1e-10) / self.config.nu_inf) # +1e-10 for when x=0, make sure it returns zero
         else:
             pass #### TODO: add proper boundary layer solving here (how?)
 
         # interpolate
         self.delta_star_at_vertices = self.interpControlPointsToVertices(self.delta_star)
-        
-        # update vertices
-        self.vertices = self.geo_vertices + self.delta_star_at_vertices[:, np.newaxis] * self.geo_normals_at_vertices
     
     def interpControlPointsToVertices(self, cp_vals):
         # find distances of vertices to control points
@@ -165,7 +153,7 @@ class Mesh:
             start_point = self.vertices[self.config.wake_starting_index]
             self.wake_vertices = np.linspace(start_point, start_point + (self.config.wake_length, 0), self.config.wake_points) # TODO: is this better?: * self.config.V_inf_vec / self.config.V_inf
         else:
-            pass #### TODO: calculate this based of last iters fluid flow (ensure to use geo_vertices to start)
+            pass #### TODO: calculate this based of last iters fluid flow
                  #### if this is done, need to update the grid calc in General.VelocityField.__init__()
 
 
@@ -202,8 +190,8 @@ class Mesh:
 
     def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
         
-        fx = np.sum( - self.pressure * self.lengths * self.geo_normals[:, 0] )
-        fy = np.sum( - self.pressure * self.lengths * self.geo_normals[:, 1] )
+        fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0] )
+        fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1] )
 
         return np.array([fx, fy])
 
@@ -212,8 +200,8 @@ class Mesh:
 
     def pressureMoment(self):
 
-        r = self.geo_control_points - self.config.ref_position
-        forces = - self.pressure[:, None] * self.geo_normals * self.geo_lengths[:, None]
+        r = self.control_points - self.config.ref_position
+        forces = - self.pressure[:, None] * self.normals * self.lengths[:, None]
 
         return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
 
@@ -224,17 +212,13 @@ class Mesh:
     def run(self):
         if self.config.verbose:
             self.printNewCase()
+            self.printAfterSetup()
 
         # Solve viscous (blasius first iteration)
-        self.solveViscous()
+        self.solveViscous() #### TODO: change the order of this????
         self.updateBLThickness()
         if self.config.verbose:
             self.printAfterViscousSolve()
-
-        # calculate mesh parameters
-        self.getMeshParameters(vertices=self.vertices)
-        if self.config.verbose:
-            self.printAfterSetup()
 
         # Setup and Solve inviscid
         self.computeAandb()
@@ -256,8 +240,8 @@ class Mesh:
 
     def run_case(self):
 
-        # Initial setup
-        self.saveGeometryInfo()
+        # calculate mesh parameters
+        self.getMeshParameters()
         if self.config.verbose:
             self.printInitial()
 
@@ -288,7 +272,6 @@ class Mesh:
             self.printFinal()
 
     def checkConvergence(self):
-        
         if not self.config.run_till_converged and self.iteration == 1:
             self.converged = True
         else:
@@ -298,18 +281,18 @@ class Mesh:
     # ==================== Plotting ======================== #
 
     def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=False, gcs=False, vectors_percent_scale=100):
-        plt.plot(self.geo_vertices[:, 0], self.geo_vertices[:, 1], color='black', linewidth=1)
+        plt.plot(self.vertices[:, 0], self.vertices[:, 1], color='black', linewidth=1)
         plt.plot(self.wake_vertices[:, 0], self.wake_vertices[:, 1], color='black', linewidth=1)
         if vertices:
-            plt.scatter(self.geo_vertices[:, 0], self.geo_vertices[:, 1], color='black', s=3)
+            plt.scatter(self.vertices[:, 0], self.vertices[:, 1], color='black', s=3)
         if control_points:
-            plt.scatter(self.geo_control_points[:, 0], self.geo_control_points[:, 1], color='red', s=3)
+            plt.scatter(self.control_points[:, 0], self.control_points[:, 1], color='red', s=3)
         if normals:
-            plt.quiver(self.geo_control_points[:, 0], self.geo_control_points[:, 1], self.geo_normals[:, 0], self.geo_normals[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='g')
+            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.normals[:, 0], self.normals[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='g')
         if tangents:
-            plt.quiver(self.geo_control_points[:, 0], self.geo_control_points[:, 1], self.geo_tangents[:, 0], self.geo_tangents[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b')
+            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.tangents[:, 0], self.tangents[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b')
         if boundary_layer:
-            plt.plot(self.geo_control_points[:, 0] + self.delta_star * self.geo_normals[:, 0], self.geo_control_points[:, 1] + self.delta_star * self.geo_normals[:, 1], color='red', linewidth=1)
+            plt.plot(self.control_points[:, 0] + self.delta_star * self.normals[:, 0], self.control_points[:, 1] + self.delta_star * self.normals[:, 1], color='red', linewidth=1)
         if gcs:
             self.plotGlobalCoordinateSystem(size=vectors_percent_scale)
 

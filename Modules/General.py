@@ -93,11 +93,11 @@ class VelocityField:
             eta = (eta - 1) / (10 - 1) * ylim
 
             # get coords
-            x = np.zeros((len(geo_mesh.geo_control_points), ny))
-            y = np.zeros((len(geo_mesh.geo_control_points), ny))
+            x = np.zeros((len(geo_mesh.control_points), ny))
+            y = np.zeros((len(geo_mesh.control_points), ny))
             for j in range(ny):
-                x[:, j] = geo_mesh.geo_control_points[:, 0] + geo_mesh.geo_normals[:, 0] * eta[j]
-                y[:, j] = geo_mesh.geo_control_points[:, 1] + geo_mesh.geo_normals[:, 1] * eta[j]
+                x[:, j] = geo_mesh.control_points[:, 0] + geo_mesh.normals[:, 0] * eta[j]
+                y[:, j] = geo_mesh.control_points[:, 1] + geo_mesh.normals[:, 1] * eta[j]
             
             # add in grid coming from the wake (using vertices not middle of panels)
             x_wake1 = np.zeros((len(geo_mesh.wake_vertices), ny))
@@ -105,10 +105,10 @@ class VelocityField:
             x_wake2 = np.zeros((len(geo_mesh.wake_vertices), ny))
             y_wake2 = np.zeros((len(geo_mesh.wake_vertices), ny))
             for j in range(ny): # gets projected outwards with same normal as last panel on each side
-                x_wake1[:, j] = geo_mesh.wake_vertices[:, 0][::-1] + geo_mesh.geo_normals[0, 0] * eta[j]
-                y_wake1[:, j] = geo_mesh.wake_vertices[:, 1] + geo_mesh.geo_normals[0, 1] * eta[j]
-                x_wake2[:, j] = geo_mesh.wake_vertices[:, 0] + geo_mesh.geo_normals[-1, 0] * eta[j]
-                y_wake2[:, j] = geo_mesh.wake_vertices[:, 1] + geo_mesh.geo_normals[-1, 1] * eta[j]
+                x_wake1[:, j] = geo_mesh.wake_vertices[:, 0][::-1] + geo_mesh.normals[0, 0] * eta[j]
+                y_wake1[:, j] = geo_mesh.wake_vertices[:, 1] + geo_mesh.normals[0, 1] * eta[j]
+                x_wake2[:, j] = geo_mesh.wake_vertices[:, 0] + geo_mesh.normals[-1, 0] * eta[j]
+                y_wake2[:, j] = geo_mesh.wake_vertices[:, 1] + geo_mesh.normals[-1, 1] * eta[j]
 
             # concatenate the 2 grids
             x = np.concat((x_wake1, x, x_wake2), axis=0)
@@ -205,9 +205,9 @@ class Visualisation:
 
     def plot(self):
         plt.figure()
-        #self.velocity_field.plotContour('pressure')
-        self.velocity_field.plotVelocityGrid()
-        #self.velocity_field.plotStreamlines(colour='velocity', density=2)
+        self.velocity_field.plotContour('pressure')
+        #self.velocity_field.plotVelocityGrid()
+        self.velocity_field.plotStreamlines(colour='velocity', density=2)
         self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=True, gcs=True, vectors_percent_scale=1)
         plt.axis('scaled')
         #plt.show()
