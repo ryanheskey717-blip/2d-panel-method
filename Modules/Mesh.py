@@ -12,20 +12,22 @@ import Modules.General as General
 
 class Mesh:
     def __init__(self, config):
+        #import config
+        self.config = config
+
+    def initialiseSetup(self, first=False):
+
+        # ================ Start Everything ================ #
         # record start time and initialise
         self.start_time = time.time()
         self.last_time_check = 0
         self.converged = False
         self.iteration = 1
 
-        # ============== Input Values ================ #
-        self.config = config
-
-        # ============== Load Geometry =============== #
+        # load geometry
         self.vertices = np.loadtxt(self.config.geo_file, skiprows=1)
         self.vertices *= self.config.chord
 
-    def getMeshParameters(self, first=False):
         # ============= Calculate control points, normals, tangents and lengths ============== #
         self.normals = []
         for i in range(len(self.vertices) - 1):
@@ -107,14 +109,17 @@ class Mesh:
     
     # ================= Viscous Solving ==================== #
     def solveViscous(self):
-        
-        if self.iteration == 1: # use blasius solution
+
+        # TODO: start transpiration method here (can call self.calculatePressureOnPanels() to find 
+        #                                       p grads if needed, since inviscid is solved already)
+        self.updateBLThickness()
+        if self.iteration == 1:
             pass
         else:
             pass
 
     def updateBLThickness(self):
-        if self.iteration == 1: # blasis displacement thickness
+        if self.iteration == 1: # blasis displacement thickness (TODO: straight to p grad based????)
             self.delta_star = 1.72 * self.control_points[:, 0] / np.sqrt(self.config.V_inf * (self.control_points[:, 0]+1e-10) / self.config.nu_inf) # +1e-10 for when x=0, make sure it returns zero
         else:
             pass #### TODO: add proper boundary layer solving here (how?)
@@ -214,12 +219,6 @@ class Mesh:
             self.printNewCase()
             self.printAfterSetup()
 
-        # Solve viscous (blasius first iteration)
-        self.solveViscous() #### TODO: change the order of this????
-        self.updateBLThickness()
-        if self.config.verbose:
-            self.printAfterViscousSolve()
-
         # Setup and Solve inviscid
         self.computeAandb()
         if self.config.verbose:
@@ -228,6 +227,13 @@ class Mesh:
         self.solveInviscid()
         if self.config.verbose:
             self.printAfterInviscidSolve()
+        
+        # Solve viscous (blasius first iteration)
+        self.solveViscous()
+        if self.config.verbose:
+            self.printAfterViscousSolve()
+
+        #### TODO: alter anything based on viscous solve????
 
         # Solution Analysis
         self.calculatePressureOnPanels()
@@ -241,7 +247,7 @@ class Mesh:
     def run_case(self):
 
         # calculate mesh parameters
-        self.getMeshParameters()
+        self.initialiseSetup()
         if self.config.verbose:
             self.printInitial()
 
@@ -320,12 +326,6 @@ class Mesh:
     def printNewCase(self):
         print( '~' * 22, f' Iteration {self.iteration:.0f} ', '~' * 23)
         print( '')
-        print( 'Solving Viscous ...', end='', flush=True)
-        self.last_time_check = time.time()
-
-    def printAfterViscousSolve(self):
-        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
-        print( '')
         print(f'Creating Mesh ...', end='', flush=True)
         self.last_time_check = time.time()
     
@@ -344,6 +344,12 @@ class Mesh:
     def printAfterInviscidSolve(self):
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
+        print( 'Solving Viscous ...', end='', flush=True)
+        self.last_time_check = time.time()
+
+    def printAfterViscousSolve(self):
+        print(f' Done ({time.time() - self.last_time_check:.2f} s)')
+        print( '')
         print( 'Calculating Forces ...', end='', flush=True)
         self.last_time_check = time.time()
     
@@ -351,6 +357,7 @@ class Mesh:
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print(f'Results Summary: ({"Converged" if self.converged else "Not Converged"})')
+        print( '')
         print(f'    Cx: {self.c_force[0]:.3f} ({self.total_force[0]:.2f} N/m)')
         print(f'    Cy: {self.c_force[1]:.3f} ({self.total_force[1]:.2f} N/m)')
         print( '')

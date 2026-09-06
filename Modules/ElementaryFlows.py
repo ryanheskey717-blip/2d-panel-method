@@ -14,6 +14,9 @@ def getConstantSourcePanelVelocity(vertex_1, vertex_2, sample_point, strength):
     r1 = np.sqrt(xl**2 + yl**2) # distance from vertex 1
     r2 = np.sqrt((xl-L)**2 + yl**2) # distance from vertex 2
 
+    r1 = np.clip(r1, 1e-12, None) # make sure there is no divide by zero
+    r2 = np.clip(r2, 1e-12, None)
+
     theta1 = np.atan2(yl, xl)
     theta2 = np.atan2(yl, xl - L)
 
@@ -49,6 +52,9 @@ def getConstantVortexPanelVelocity(vertex_1, vertex_2, sample_point, strength):
 
     r1 = np.sqrt(xl**2 + yl**2) # distance from vertex 1
     r2 = np.sqrt((xl-L)**2 + yl**2) # distance from vertex 2
+
+    r1 = np.clip(r1, 1e-12, None) # make sure there is no divide by zero
+    r2 = np.clip(r2, 1e-12, None)
 
     theta1 = np.atan2(yl, xl)
     theta2 = np.atan2(yl, xl - L)

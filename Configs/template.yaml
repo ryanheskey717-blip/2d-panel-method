@@ -6,7 +6,7 @@ verbose: True
 # input
 geo_file: "Geometries/naca0012_100.dat"
 chord: 0.1 # m (reference length)
-ref_position: [0, 0] # x(m), y(m)
+ref_position: [0.025, 0] # x(m), y(m)
 
 # flow conditions
 M_inf: 0.1
@@ -32,7 +32,7 @@ wake_length: 0.02 # m
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: False
+visualisation: True
 scale: 'auto'
 
 # output
