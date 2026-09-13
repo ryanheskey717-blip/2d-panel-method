@@ -226,8 +226,8 @@ class Mesh:
             self.printNewCase()
 
         # Solve viscous (blasius first iteration)
-        self.solveViscous()
-        self.updateBLThickness()
+        #self.solveViscous()
+        #self.updateBLThickness()
         if self.config.verbose:
             self.printAfterViscousSolve()
 

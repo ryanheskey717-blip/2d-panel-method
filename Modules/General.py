@@ -205,9 +205,9 @@ class Visualisation:
 
     def plot(self):
         plt.figure()
-        #self.velocity_field.plotContour('pressure')
-        self.velocity_field.plotVelocityGrid()
-        #self.velocity_field.plotStreamlines(colour='velocity', density=2)
+        self.velocity_field.plotContour('pressure')
+        #self.velocity_field.plotVelocityGrid()
+        self.velocity_field.plotStreamlines(colour='velocity', density=2)
         self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=True, gcs=True, vectors_percent_scale=1)
         plt.axis('scaled')
         #plt.show()
