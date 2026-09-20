@@ -9,6 +9,7 @@ from copy import deepcopy
 
 import Modules.ElementaryFlows as flows
 import Modules.General as General
+import Modules.Viscous as Viscous
 
 class Mesh:
     def __init__(self, config):
@@ -63,6 +64,7 @@ class Mesh:
         self.b = np.zeros(self.N+1)
         self.delta_star = np.zeros(self.N) # BL computed at each control point
         self.updateWakePoints(first=True)
+        self.transpiration_velocity = np.zeros(self.N)
         self.normals_at_vertices = self.interpControlPointsToVertices(self.normals)
         self.normals_at_vertices /= np.linalg.norm(self.normals_at_vertices, axis=1, keepdims=True)
         
@@ -98,7 +100,7 @@ class Mesh:
             if i == self.N: # kutta row
                 self.b[-1] = - (np.dot(self.config.V_inf_vec, self.tangents[0]) + np.dot(self.config.V_inf_vec, self.tangents[-1])) # - (upper + lower)
             else:
-                self.b[i] = - np.dot(self.config.V_inf_vec, self.normals[i])
+                self.b[i] = - np.dot(self.config.V_inf_vec, self.normals[i]) + self.transpiration_velocity[i]
 
 
     # ================== Inviscid Solving ===================== #
@@ -107,26 +109,18 @@ class Mesh:
         self.source_strengths = x[:-1]
         self.vortex_strength = x[-1]
     
-    # ================= Viscous Solving ==================== #
-    def solveViscous(self):
+    # =================== Viscous Solving ===================== #
+    def solveViscous(self, initial=False):
+        # calculate tangential velocity at control points and vertices
+        self.calculateTangentialVelocityAtControlPoints()
+        self.velocity_tangent_at_vertices = self.interpControlPointsToVertices(self.velocity_tangent_at_control_points)
 
-        # TODO: start transpiration method here (can call self.calculatePressureOnPanels() to find 
-        #                                       p grads if needed, since inviscid is solved already)
-        self.updateBLThickness()
-        if self.iteration == 1:
-            pass
-        else:
-            pass
-
-    def updateBLThickness(self):
-        if self.iteration == 1: # blasis displacement thickness (TODO: straight to p grad based????)
-            self.delta_star = 1.72 * self.control_points[:, 0] / np.sqrt(self.config.V_inf * (self.control_points[:, 0]+1e-10) / self.config.nu_inf) # +1e-10 for when x=0, make sure it returns zero
-        else:
-            pass #### TODO: add proper boundary layer solving here (how?)
-
-        # interpolate
-        self.delta_star_at_vertices = self.interpControlPointsToVertices(self.delta_star)
+        # call viscous solving functions
+        Viscous.updateDisplacementThickness(self)
+        Viscous.updateTranspirationVelocity(self)
+        self.skin_friction_coeff = Viscous.getSkinFrictionCoefficient(self)
     
+    # ======================= General ========================= #
     def interpControlPointsToVertices(self, cp_vals):
         # find distances of vertices to control points
         outs = []
@@ -153,7 +147,7 @@ class Mesh:
         outs = np.array(outs)
         return outs
 
-    def updateWakePoints(self, first=False):
+    def updateWakePoints(self, first=False): # TODO: only used for vis now (simplify)
         if first == True:
             start_point = self.vertices[self.config.wake_starting_index]
             self.wake_vertices = np.linspace(start_point, start_point + (self.config.wake_length, 0), self.config.wake_points) # TODO: is this better?: * self.config.V_inf_vec / self.config.V_inf
@@ -172,10 +166,12 @@ class Mesh:
 
     def calculatePressureOnPanels(self):
         if self.config.pressure_calculation == "inviscid_bernoulli":
-            self.calculateTangentialVelocityAtControlPoints()
+            # tangential velocity calculated in viscous solve
             self.pressureFromBernoulli()
         else:
-            print(f"\nWarning: {self.pressure_calculation} not yet supported.\n")
+            print(f"\nWarning: {self.pressure_calculation} not yet supported. Switching to Bernoulli.\n")
+            # tangential velocity calculated in viscous solve
+            self.pressureFromBernoulli()
 
     def pressureFromBernoulli(self): # dimensional
         self.pressure = self.config.p_inf - 0.5 * self.config.rho_inf * ( self.velocity_tangent_at_control_points ** 2 - self.config.V_inf ** 2 )
@@ -193,15 +189,26 @@ class Mesh:
         self.c_lift = np.dot(self.c_force, np.array([-np.sin(self.config.alpha), np.cos(self.config.alpha)]))
         self.c_drag = np.dot(self.c_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
 
-    def pressureForce(self): # midpoint integrate for forces (as only know pressure at control points i.e. centres)
+    def pressureForce(self): # sum integrate for forces (as only know pressure at control points i.e. centres)
         
         fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0] )
         fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1] )
 
         return np.array([fx, fy])
 
-    def viscousForce(self):
-        return np.array([0, 0])
+    def viscousForce(self): #### TODO: investigate issue of discontinuous force vs. aoa (i think due to i_stag changing)
+        q = 0.5 * self.config.rho_inf * self.config.V_inf**2
+        fx = 0; fy = 0
+        for i in np.arange(self.i_stag, -1, -1): # top surface
+            force = q * self.lengths[i] * self.skin_friction_coeff[i]
+            fx += force * self.tangents[i, 0]
+            fy += force * self.tangents[i, 1]
+        for i in range(self.i_stag+1, self.N): # bottom surface
+            force = q * self.lengths[i] * self.skin_friction_coeff[i]
+            fx += force * -self.tangents[i, 0]
+            fy += force * -self.tangents[i, 1]
+
+        return np.array([fx, fy])
 
     def pressureMoment(self):
 
@@ -211,12 +218,28 @@ class Mesh:
         return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
 
     def viscousMoment(self):
-        return 0
+
+        r = self.control_points - self.config.ref_position
+        
+        q = 0.5 * self.config.rho_inf * self.config.V_inf**2
+        forces = np.zeros((self.N, 2))
+        for i in np.arange(self.i_stag, -1, -1): # top surface
+            force = q * self.lengths[i] * self.skin_friction_coeff[i]
+            forces[i, 0] += force * self.tangents[i, 0]
+            forces[i, 1] = force * self.tangents[i, 1]
+        for i in range(self.i_stag+1, self.N): # bottom surface
+            force = q * self.lengths[i] * self.skin_friction_coeff[i]
+            forces[i, 0] = force * -self.tangents[i, 0]
+            forces[i, 1] = force * -self.tangents[i, 1]
+
+        return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
 
     # ====================== Running =========================== #
     def run(self):
         if self.config.verbose:
             self.printNewCase()
+
+        if self.config.verbose:
             self.printAfterSetup()
 
         # Setup and Solve inviscid
@@ -224,11 +247,12 @@ class Mesh:
         if self.config.verbose:
             self.printAfterPopulation()
 
+        # Solve linear system
         self.solveInviscid()
         if self.config.verbose:
             self.printAfterInviscidSolve()
         
-        # Solve viscous (blasius first iteration)
+        # Solve viscous
         self.solveViscous()
         if self.config.verbose:
             self.printAfterViscousSolve()
@@ -254,6 +278,7 @@ class Mesh:
         # main iteration loop
         while not self.converged:
             self.run()
+            self.iteration += 1
 
         # Output
         if self.config.write_to_file:
@@ -278,10 +303,11 @@ class Mesh:
             self.printFinal()
 
     def checkConvergence(self):
-        if not self.config.run_till_converged and self.iteration == 1:
+        if not self.config.run_till_converged and self.iteration == 2:
             self.converged = True
         else:
-            raise('success')
+            pass
+            #raise('more than 1 iter not supported yet')
 
 
     # ==================== Plotting ======================== #
@@ -294,9 +320,9 @@ class Mesh:
         if control_points:
             plt.scatter(self.control_points[:, 0], self.control_points[:, 1], color='red', s=3)
         if normals:
-            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.normals[:, 0], self.normals[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='g')
+            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.normals[:, 0], self.normals[:, 1], angles='xy', scale_units='xy', scale=100/vectors_percent_scale, width=0.005, color='g')
         if tangents:
-            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.tangents[:, 0], self.tangents[:, 1], angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b')
+            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.tangents[:, 0], self.tangents[:, 1], angles='xy', scale_units='xy', scale=100/vectors_percent_scale, width=0.005, color='b')
         if boundary_layer:
             plt.plot(self.control_points[:, 0] + self.delta_star * self.normals[:, 0], self.control_points[:, 1] + self.delta_star * self.normals[:, 1], color='red', linewidth=1)
         if gcs:
@@ -326,7 +352,7 @@ class Mesh:
     def printNewCase(self):
         print( '~' * 22, f' Iteration {self.iteration:.0f} ', '~' * 23)
         print( '')
-        print(f'Creating Mesh ...', end='', flush=True)
+        print( 'Setting up viscous correction ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printAfterSetup(self):
@@ -338,19 +364,19 @@ class Mesh:
     def printAfterPopulation(self):
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        print( 'Solving Inviscid ...', end='', flush=True)
+        print( 'Solving inviscid ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterInviscidSolve(self):
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        print( 'Solving Viscous ...', end='', flush=True)
+        print( 'Solving viscous ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterViscousSolve(self):
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        print( 'Calculating Forces ...', end='', flush=True)
+        print( 'Calculating forces ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printForcesResults(self):
@@ -378,7 +404,7 @@ class Mesh:
         print( '')
     
     def printBeforeVelField(self):
-        print( 'Creating Visualisation ...', end='', flush=True)
+        print( 'Creating visualisation ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printAfterVelField(self):

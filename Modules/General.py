@@ -45,6 +45,7 @@ class Config:
             self.run_till_converged = True
         
         # turbulence/viscous
+        self.boundary_layer_calculation = self.full_data["boundary_layer"]
         self.inflation_layers = self.full_data["inflation_layers"]
         self.wake_starting_index = int(self.full_data["wake_starting_index"])
         self.wake_points = int(self.full_data["wake_points"])
@@ -198,7 +199,7 @@ class VelocityField:
 class Visualisation:
     def __init__(self, config, mesh):
         
-        #self.velocity_field = VelocityField(mesh, config, 'cartesian', (-0.02, 0.14), (-0.07, 0.07), 100, 100) # (0.095, 0.105), (-0.005, 0.005)
+        #self.velocity_field = VelocityField(mesh, config, 'cartesian', (0.095, 0.105), (-0.005, 0.005), 100, 100) # (-0.02, 0.14), (-0.07, 0.07)
         self.velocity_field = VelocityField(mesh, config, 'conformal', ylim=0.05, ny=50)
         self.config = config
         self.mesh = mesh
@@ -208,7 +209,7 @@ class Visualisation:
         self.velocity_field.plotContour('pressure')
         #self.velocity_field.plotVelocityGrid()
         self.velocity_field.plotStreamlines(colour='velocity', density=2)
-        self.mesh.plotGeometry(vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=True, gcs=True, vectors_percent_scale=1)
+        self.mesh.plotGeometry(vertices=True, control_points=True, normals=False, tangents=False, boundary_layer=True, gcs=False, vectors_percent_scale=1)
         plt.axis('scaled')
         #plt.show()
 

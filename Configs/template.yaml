@@ -16,13 +16,14 @@ mu_inf: 1.81e-5
 p_inf: 101325 # Pa
 
 # geometry conditions
-alpha: 6 # deg
+alpha: 5 # deg
 
 # solver
 control_point_offset: 1.0e-7 # m (for numerical stability) ( < 1e-5 )
-convergence_criterion: 0 # 0: single iteration. else: num for change in coeffs (suggest: 1e-2?)
+convergence_criterion: 0 # 0: double iteration to include bl thickness. Else: num for change in coeffs/residuals (suggest: 1e-2?)
 
 # turbulence/viscous
+boundary_layer: 'blasius' # only 'blasius' supported currently
 inflation_layers: 10
 wake_starting_index: -1 # 0 for start, -1 for end
 wake_points: 10 # number of points in wake
@@ -32,7 +33,7 @@ wake_length: 0.02 # m
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: True
+visualisation: False
 scale: 'auto'
 
 # output
