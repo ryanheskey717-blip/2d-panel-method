@@ -2,6 +2,14 @@
 
 # Work in Progress
 
+## TODO:
+
+- add turbulent blasius boundary layer
+- maybe add more complex boundary layer (that includes pressure gradients) if i have time
+- add outputs to file
+- format each function correctly
+- create documentation
+
 ## Create venv
 
 ### Mac:
