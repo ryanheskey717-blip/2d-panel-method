@@ -1,13 +1,12 @@
 # import modules
-import Modules.General as General
-from Modules.Mesh import Mesh
+import Modules.PanelMethod as pm
 
-# inputs
-input_file = "Configs/template.yaml"
+# initialise
+# eg. single case
+#case = pm.SingleCase("Configs/template.yaml")
 
-# load data
-config = General.Config(input_file)
-mesh = Mesh(config)
+# eg. sweep over alpha
+case = pm.Sweep("Configs/template.yaml", "Configs/sweep_template.yaml")
 
-# run panel method
-mesh.run_case()
+# run
+case.run()

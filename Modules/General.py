@@ -31,18 +31,12 @@ class Config:
         self.T_inf = self.full_data["T_inf"]
         self.rho_inf = self.full_data["rho_inf"]
         self.mu_inf = self.full_data["mu_inf"]
-        self.nu_inf = self.mu_inf / self.rho_inf
         self.p_inf = self.full_data["p_inf"]
-
-        self.alpha = np.deg2rad(self.full_data["alpha"])
+        self.alpha = self.full_data["alpha"]
 
         # solver
         self.control_point_offset = float(self.full_data["control_point_offset"])
         self.convergence_criterion = float(self.full_data["convergence_criterion"])
-        if self.convergence_criterion == 0.0: # single iteration
-            self.run_till_converged = False
-        else: # let run until convergence
-            self.run_till_converged = True
         
         # turbulence/viscous
         self.boundary_layer_calculation = self.full_data["boundary_layer"]
@@ -63,12 +57,24 @@ class Config:
         self.out_coeff_file = self.full_data["output"]["coefficients"]
 
         # calculate other important values
+        self.update()
+
+    def update(self):
+        # calculated values
+        self.nu_inf = self.mu_inf / self.rho_inf
+        self.alpha = np.deg2rad(self.alpha)
         self.V_inf = self.M_inf * np.sqrt(1.4 * 287 * (self.T_inf + 273.15))
         self.V_inf_vec = np.array([
             self.V_inf * np.cos(self.alpha),
             self.V_inf * np.sin(self.alpha)
         ])
         self.Re = self.V_inf * self.chord * self.rho_inf / self.mu_inf
+
+        if self.convergence_criterion == 0.0: # single iteration
+            self.run_till_converged = False
+        else: # let run until convergence
+            self.run_till_converged = True
+
 
 # ==================== Analysing ========================= #
 

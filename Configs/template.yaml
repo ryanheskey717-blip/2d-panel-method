@@ -1,7 +1,7 @@
 ## NOTE: if anything is added here the Config class must be updated accordingly
 
 # settings
-verbose: True
+verbose: False
 
 # input
 geo_file: "Geometries/naca0012_100.dat"
@@ -33,7 +33,7 @@ wake_length: 0.02 # m
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: False
+visualisation: True
 scale: 'auto'
 
 # output
