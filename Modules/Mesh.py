@@ -267,6 +267,7 @@ class Mesh:
             self.printForcesResults()
 
         #### TODO: write convergence to file here?
+        self.updateResults()
 
     def run_case(self):
 
@@ -284,7 +285,10 @@ class Mesh:
         if self.config.write_to_file:
             if self.config.verbose:
                 self.printBeforeWriting()
-            ##### add writing here
+            if self.config.sweep_iteration != 0:
+                self.resultsToCSV(first_entry=False)
+            else:
+                self.resultsToCSV()
             if self.config.verbose:
                 self.printAfterWriting()
         
@@ -308,6 +312,32 @@ class Mesh:
         else:
             pass
             #raise('more than 1 iter not supported yet')
+    
+    # ===================== Output ========================= #
+
+    def updateResults(self):
+
+        self.results = [self.config.geo_file, self.config.M_inf, self.config.V_inf, self.config.Re, np.rad2deg(self.config.alpha), self.config.chord, self.config.ref_position[0], self.config.ref_position[1],
+                        self.total_force[0], self.total_force[1], self.c_force[0], self.c_force[1], self.drag, self.lift, self.c_drag, self.c_lift, self.total_moment, self.c_moment]
+
+    def resultsToCSV(self, first_entry=True):
+
+        # set writing type
+        if first_entry == False:
+            mode = 'a' # append (next case saves below previous)
+        else:
+            mode = 'w' # overwrite (first entry)
+        
+        # open and write to file
+        with open(self.config.out_coeff_file, mode, newline='') as file:
+            writer = csv.writer(file)
+
+            # header
+            if first_entry:
+                writer.writerow(['geometry', 'mach', 'v_inf', 're', 'alpha_deg', 'chord', 'ref_loc_x', 'ref_loc_y', 'f_x', 'f_y', 'c_x', 'c_y', 'f_d', 'f_l', 'c_d', 'c_l', 'moment', 'c_m'])
+
+            # write data
+            writer.writerow(self.results)
 
 
     # ==================== Plotting ======================== #

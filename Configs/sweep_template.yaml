@@ -1,11 +1,11 @@
-# get progress update (recommend set verbose to False in general config)
+# get progress update
 updates: True
 
 # sweep across aoa
 alpha: 
-  type: 'explicit' # 'explicit', 'equal-spacing', 'number'
+  type: 'equal-spacing' # 'explicit', 'equal-spacing', 'number'
   values: [-5, 0, 5] # used if 'explicit'
-  min_val: -5 # used for 'equal-spacing' and 'number'
-  max_val: 5 # used for 'equal-spacing' and 'number'
-  spacing: 1 # used for 'equal-spacing'
+  min_val: -15 # used for 'equal-spacing' and 'number'
+  max_val: 15 # used for 'equal-spacing' and 'number'
+  spacing: 0.1 # used for 'equal-spacing'
   number: 11 # used for 'number'

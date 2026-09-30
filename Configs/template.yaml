@@ -1,7 +1,7 @@
 ## NOTE: if anything is added here the Config class must be updated accordingly
 
 # settings
-verbose: False
+verbose: True
 
 # input
 geo_file: "Geometries/naca0012_100.dat"
@@ -33,10 +33,11 @@ wake_length: 0.02 # m
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: True
+visualisation: False
 scale: 'auto'
 
 # output
 output:
-  write_to_file: False
-  coefficients: 'coefficients.txt'
+  write_to_file: True
+  overwrite: True
+  coefficients: 'Output/test_coefficients.csv'

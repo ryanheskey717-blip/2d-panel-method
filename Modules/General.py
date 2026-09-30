@@ -54,7 +54,11 @@ class Config:
 
         # output
         self.write_to_file = self.full_data["output"]["write_to_file"]
+        self.overwrite_output = self.full_data["output"]["overwrite"]
         self.out_coeff_file = self.full_data["output"]["coefficients"]
+
+        # set sweep run number (iterated in Sweep class in PanelMethod)
+        self.sweep_iteration = 0
 
         # calculate other important values
         self.update()

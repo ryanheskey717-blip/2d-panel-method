@@ -12,7 +12,7 @@ def blasiusDeltaStar(mesh): # at control points
         if Re_x == 0.0:
             delta_star[i] = 0
         else:
-            delta_star[i] = 1.72 * mesh.control_points[i, 0] / np.sqrt(Re_x)
+            delta_star[i] = 20 * 1.72 * mesh.control_points[i, 0] / np.sqrt(Re_x)
     
     return delta_star
 

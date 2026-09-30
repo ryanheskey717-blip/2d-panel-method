@@ -1,6 +1,7 @@
 # import modules
 import numpy as np
 import yaml
+import time
 import Modules.General as General
 from Modules.Mesh import Mesh
 
@@ -41,10 +42,17 @@ class Sweep:
         self.config = General.Config(input_file)
 
         # ensure results are saved and no visualisation shown
-        ###### TODO: self.config.write_to_file = True
+        self.config.verbose = False
+        self.config.write_to_file = True
+        self.config.overwrite_output = False
         self.config.visualisation = False
+        self.config.sweep = True
 
     def run(self):
+
+        # take note of start time
+        self.start_time = time.time()
+        self.last_time = time.time()
 
         # print update
         if self.sweep_data["updates"]:
@@ -55,6 +63,7 @@ class Sweep:
 
             # update config for this case
             self.config.alpha = self.alphas[i]
+            self.config.sweep_iteration = i
             self.config.update()
             
             # initialise new setup
@@ -65,7 +74,8 @@ class Sweep:
 
             # print update
             if self.sweep_data["updates"]:
-                print(f'    Finished {i+1} of {self.total_cases} cases...')
+                print(f'    Finished {i+1} of {self.total_cases} cases... (Time: {time.time()-self.last_time:.2}s, Time Left: {(time.time()-self.last_time) * (self.total_cases - (i+1)):.0f}s)')
+                self.last_time = time.time()
         
         # print update
         if self.sweep_data["updates"]:

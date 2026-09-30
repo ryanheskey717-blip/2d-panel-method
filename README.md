@@ -4,9 +4,12 @@
 
 ## TODO:
 
+- figure out the current issue of results jumping
 - add turbulent blasius boundary layer
 - maybe add more complex boundary layer (that includes pressure gradients) if i have time
-- add outputs to file
+- add boundary layer to velocity field
+- add progress bar instead for sweeps
+- continue data analysis
 - format each function correctly
 - create documentation
 
