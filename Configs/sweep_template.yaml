@@ -7,5 +7,5 @@ alpha:
   values: [-5, 0, 5] # used if 'explicit'
   min_val: -15 # used for 'equal-spacing' and 'number'
   max_val: 15 # used for 'equal-spacing' and 'number'
-  spacing: 0.1 # used for 'equal-spacing'
+  spacing: 1 # used for 'equal-spacing'
   number: 11 # used for 'number'

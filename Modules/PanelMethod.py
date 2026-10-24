@@ -24,7 +24,7 @@ class Sweep:
 
     def __init__(self, input_file, sweep_file):
 
-        # extract sweep data
+        # extract and define sweep data
         with open(sweep_file, "r") as file:
             self.sweep_data = yaml.safe_load(file)
         
@@ -37,16 +37,17 @@ class Sweep:
         
         # get sweep information
         self.total_cases = len(self.alphas)
+        self.updates = self.sweep_data["updates"]
 
         # load initial input file
         self.config = General.Config(input_file)
 
         # ensure results are saved and no visualisation shown
+        self.config.sweep = True
         self.config.verbose = False
         self.config.write_to_file = True
         self.config.overwrite_output = False
         self.config.visualisation = False
-        self.config.sweep = True
 
     def run(self):
 
@@ -55,7 +56,7 @@ class Sweep:
         self.last_time = time.time()
 
         # print update
-        if self.sweep_data["updates"]:
+        if self.updates:
             print(f'\nStarting sweep through {self.total_cases} cases:\n')
 
         # loop through each case
@@ -73,10 +74,10 @@ class Sweep:
             self.mesh.run_case()
 
             # print update
-            if self.sweep_data["updates"]:
+            if self.updates:
                 print(f'    Finished {i+1} of {self.total_cases} cases... (Time: {time.time()-self.last_time:.2}s, Time Left: {(time.time()-self.last_time) * (self.total_cases - (i+1)):.0f}s)')
                 self.last_time = time.time()
         
         # print update
-        if self.sweep_data["updates"]:
-            print(f'\nDone. Results saved to {self.config.out_coeff_file}\n')
+        if self.updates:
+            print(f'\nDone ({self.last_time - self.start_time:.1f}s). Results saved to {self.config.out_coeff_file}\n')

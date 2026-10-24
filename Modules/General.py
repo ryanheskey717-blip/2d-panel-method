@@ -39,6 +39,7 @@ class Config:
         self.convergence_criterion = float(self.full_data["convergence_criterion"])
         
         # turbulence/viscous
+        self.include_viscous = True
         self.boundary_layer_calculation = self.full_data["boundary_layer"]
         self.inflation_layers = self.full_data["inflation_layers"]
         self.wake_starting_index = int(self.full_data["wake_starting_index"])
@@ -73,6 +74,9 @@ class Config:
             self.V_inf * np.sin(self.alpha)
         ])
         self.Re = self.V_inf * self.chord * self.rho_inf / self.mu_inf
+
+        if self.boundary_layer_calculation == 'none': 
+            self.include_viscous = False # defaults to True if this^ is not true
 
         if self.convergence_criterion == 0.0: # single iteration
             self.run_till_converged = False

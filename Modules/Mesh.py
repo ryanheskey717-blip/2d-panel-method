@@ -116,9 +116,12 @@ class Mesh:
         self.velocity_tangent_at_vertices = self.interpControlPointsToVertices(self.velocity_tangent_at_control_points)
 
         # call viscous solving functions
-        Viscous.updateDisplacementThickness(self)
-        Viscous.updateTranspirationVelocity(self)
-        self.skin_friction_coeff = Viscous.getSkinFrictionCoefficient(self)
+        if self.config.include_viscous:
+            Viscous.updateDisplacementThickness(self)
+            Viscous.updateTranspirationVelocity(self)
+            self.skin_friction_coeff = Viscous.getSkinFrictionCoefficient(self)
+        else:
+            self.skin_friction_coeff = np.zeros(self.N)
     
     # ======================= General ========================= #
     def interpControlPointsToVertices(self, cp_vals):
@@ -197,18 +200,21 @@ class Mesh:
         return np.array([fx, fy])
 
     def viscousForce(self): #### TODO: investigate issue of discontinuous force vs. aoa (i think due to i_stag changing)
-        q = 0.5 * self.config.rho_inf * self.config.V_inf**2
-        fx = 0; fy = 0
-        for i in np.arange(self.i_stag, -1, -1): # top surface
-            force = q * self.lengths[i] * self.skin_friction_coeff[i]
-            fx += force * self.tangents[i, 0]
-            fy += force * self.tangents[i, 1]
-        for i in range(self.i_stag+1, self.N): # bottom surface
-            force = q * self.lengths[i] * self.skin_friction_coeff[i]
-            fx += force * -self.tangents[i, 0]
-            fy += force * -self.tangents[i, 1]
+        if self.config.include_viscous:
+            q = 0.5 * self.config.rho_inf * self.config.V_inf**2
+            fx = 0; fy = 0
+            for i in np.arange(self.i_stag, -1, -1): # top surface
+                force = q * self.lengths[i] * self.skin_friction_coeff[i]
+                fx += force * self.tangents[i, 0]
+                fy += force * self.tangents[i, 1]
+            for i in range(self.i_stag+1, self.N): # bottom surface
+                force = q * self.lengths[i] * self.skin_friction_coeff[i]
+                fx += force * -self.tangents[i, 0]
+                fy += force * -self.tangents[i, 1]
 
-        return np.array([fx, fy])
+            return np.array([fx, fy])
+        else:
+            return np.array([0, 0])
 
     def pressureMoment(self):
 
@@ -218,21 +224,23 @@ class Mesh:
         return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
 
     def viscousMoment(self):
+        if self.config.include_viscous:
+            r = self.control_points - self.config.ref_position
+            
+            q = 0.5 * self.config.rho_inf * self.config.V_inf**2
+            forces = np.zeros((self.N, 2))
+            for i in np.arange(self.i_stag, -1, -1): # top surface
+                force = q * self.lengths[i] * self.skin_friction_coeff[i]
+                forces[i, 0] += force * self.tangents[i, 0]
+                forces[i, 1] = force * self.tangents[i, 1]
+            for i in range(self.i_stag+1, self.N): # bottom surface
+                force = q * self.lengths[i] * self.skin_friction_coeff[i]
+                forces[i, 0] = force * -self.tangents[i, 0]
+                forces[i, 1] = force * -self.tangents[i, 1]
 
-        r = self.control_points - self.config.ref_position
-        
-        q = 0.5 * self.config.rho_inf * self.config.V_inf**2
-        forces = np.zeros((self.N, 2))
-        for i in np.arange(self.i_stag, -1, -1): # top surface
-            force = q * self.lengths[i] * self.skin_friction_coeff[i]
-            forces[i, 0] += force * self.tangents[i, 0]
-            forces[i, 1] = force * self.tangents[i, 1]
-        for i in range(self.i_stag+1, self.N): # bottom surface
-            force = q * self.lengths[i] * self.skin_friction_coeff[i]
-            forces[i, 0] = force * -self.tangents[i, 0]
-            forces[i, 1] = force * -self.tangents[i, 1]
-
-        return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
+            return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
+        else:
+            return 0
 
     # ====================== Running =========================== #
     def run(self):
@@ -254,8 +262,10 @@ class Mesh:
         
         # Solve viscous
         self.solveViscous()
-        if self.config.verbose:
+        if self.config.verbose and self.config.include_viscous:
             self.printAfterViscousSolve()
+        if self.config.verbose and not self.config.include_viscous:
+            self.printAfterNoViscous()
 
         #### TODO: alter anything based on viscous solve????
 
@@ -307,7 +317,9 @@ class Mesh:
             self.printFinal()
 
     def checkConvergence(self):
-        if not self.config.run_till_converged and self.iteration == 2:
+        if self.iteration == 2 and not self.config.run_till_converged and self.config.include_viscous:
+            self.converged = True
+        elif self.iteration == 1 and not self.config.run_till_converged and not self.config.include_viscous:
             self.converged = True
         else:
             pass
@@ -400,11 +412,17 @@ class Mesh:
     def printAfterInviscidSolve(self):
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
-        print( 'Solving viscous ...', end='', flush=True)
+        print( 'Solving viscous (if applicable) ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterViscousSolve(self):
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
+        print( '')
+        print( 'Calculating forces ...', end='', flush=True)
+        self.last_time_check = time.time()
+
+    def printAfterNoViscous(self):
+        print(f' Skipped ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print( 'Calculating forces ...', end='', flush=True)
         self.last_time_check = time.time()
