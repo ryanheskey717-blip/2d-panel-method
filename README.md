@@ -121,7 +121,7 @@ To conduct post processing/analysis, import the following module:
 ```
 import Modules.SweepAnalysis as swan
 ```
-This module contains support for loading a results ```.csv``` file and plotting chosen parameters over angle of attack. Any header included in the ```.csv``` can be used to choose what to plot. This module can also create subplots of multiple parameters using a list of header names. This module has support to load an XFOIL results file, and compare to the generated results by displaying on the same plot. The code below does just this with some provided sample data:
+This module contains support for loading a results ```.csv``` file and plotting chosen parameters over angle of attack. Any header included in the ```.csv``` can be used to choose what to plot. This module can also create subplots of multiple parameters using a list of header names. This module has support to load an XFOIL results file from [Airfoil Tools](http://airfoiltools.com/polar/details?polar=xf-n0012-il-200000-n5), and compare to the generated results by displaying on the same plot. The code below does just this with some provided sample data:
 ```
 results = swan.Results('Output/naca0012_coefficients_bl.csv')
 comp_res = swan.XFOILResults('AirfoilData/naca0012_Re_200000.txt')

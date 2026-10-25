@@ -4,7 +4,7 @@
 verbose: True
 
 # input
-geo_file: "Geometries/naca2414_100.dat"
+geo_file: "Geometries/naca0012_100.dat"
 chord: 1.0 # m (reference length)
 ref_position: [0.25, 0] # x(m), y(m)
 
@@ -44,4 +44,4 @@ scale: 'auto'
 output:
   write_to_file: False
   overwrite: True
-  coefficients: 'Output/out_coeffs.csv'
+  coefficients: 'Output/example_out.csv'

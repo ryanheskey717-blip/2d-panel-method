@@ -13,6 +13,6 @@ case = pm.SingleCase("Configs/template.yaml")
 case.run()
 
 # create plots
-#results = swan.Results('Output/naca0012_coefficients_bl.csv')
-#comp_res = swan.XFOILResults('AirfoilData/naca0012_Re_200000.txt')
+#results = swan.Results('Output/naca2414_coefficients_no_bl.csv')
+#comp_res = swan.XFOILResults('AirfoilData/naca2414_Re_200000.txt')
 #results.subplots(x=['alpha_deg', 'alpha_deg', 'alpha_deg'], y=['c_l', 'c_d', 'c_m'], nrows=1, ncols=3, compare=comp_res)
