@@ -98,6 +98,10 @@ class Config:
 
         # visualisation
         self.visualisation = self.full_data["visualisation"]
+        self.vis_grid_method = self.full_data["grid_method"]
+        self.vis_geo = self.full_data["vis_geo"]
+        self.strm_colour = self.full_data["streamlines_colour"]
+        self.cont_type = self.full_data["contour_type"]
         self.scale = self.full_data["scale"]
 
         # output
@@ -232,7 +236,9 @@ class VelocityField:
             
             # plot streamlines
             strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='inferno')
-            plt.colorbar(strm.lines)
+            
+            if colour == 'velocity': # add colour bar if needed
+                plt.colorbar(strm.lines)
 
         elif self.area_type == 'conformal':
             x_vec = np.linspace(self.meshgrid[0].min(), self.meshgrid[0].max(), 100)
@@ -253,7 +259,9 @@ class VelocityField:
 
             # plot streamlines
             strm = plt.streamplot(x_cart, y_cart, u_cart, v_cart, color=colour, linewidth=1, density=density, cmap='inferno')
-            plt.colorbar(strm.lines)
+            
+            if colour == 'velocity': # add colour bar if needed
+                plt.colorbar(strm.lines)
 
         # remove arrows if needed
         arrows = False
@@ -267,14 +275,14 @@ class VelocityField:
         r"""Plots contours of various variables on a preexisting figure.
 
         Args:
-            var (str): What varible should the contour be based on ('vx', 'vy', 'mag', 'pressure')
+            var (str): What variable should the contour be based on ('vx', 'vy', 'vmag', 'pressure')
             colorbar (bool): Include colorbar or not (defaults to True)
         """
         if var == "vx":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], self.v[0], levels=50, cmap='viridis')
         elif var == "vy":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], self.v[1], levels=50, cmap='viridis')
-        elif var == "mag":
+        elif var == "vmag":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], np.sqrt(self.v[0]**2 + self.v[1]**2), levels=50, cmap='viridis')
         elif var == "pressure":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=500, cmap='viridis')
@@ -295,8 +303,7 @@ class VelocityField:
             plt.plot(self.meshgrid[0][:, j], self.meshgrid[1][:, j], color='gray', linewidth=0.5)
     
 class Visualisation:
-    r"""Handles the generation of a visualisation of the flow around a body.
-    """
+    r"""Handles the generation of a visualisation of the flow around a body."""
     def __init__(self, config, mesh):
         r"""Initialises a visualisation and accepts the info required to create it. Creates a 
         VelocityField instance to calculate off-body velocities.
@@ -305,10 +312,14 @@ class Visualisation:
             config (object): Instance of Config class, containing settings.
             mesh (object): Instance of Mesh class, containing geometry and solved panel system.
         """
-        #self.velocity_field = VelocityField(mesh, config, 'cartesian', (0.095, 0.105), (-0.005, 0.005), 100, 100) # (-0.02, 0.14), (-0.07, 0.07)
-        self.velocity_field = VelocityField(mesh, config, 'conformal', ylim=0.05, ny=50)
         self.config = config
         self.mesh = mesh
+        if self.config.vis_grid_method == 'cartesian':
+            self.velocity_field = VelocityField(mesh, config, 'cartesian', (0.095, 0.105), (-0.005, 0.005), 100, 100) # (-0.02, 0.14), (-0.07, 0.07)
+        elif self.config.vis_grid_method == 'conformal':
+            self.velocity_field = VelocityField(mesh, config, 'conformal', ylim=0.2, ny=50)
+        else:
+            print(f"\nWarning: {self.config.vis_grid_method} not supported. Switching to conformal.\n")
 
     def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=False, gcs=False, vectors_percent_scale=100):
         r"""Generates diagnostic plots of the panel mesh and boundary layer.
@@ -335,7 +346,7 @@ class Visualisation:
         if boundary_layer:
             plt.plot(self.mesh.control_points[:, 0] + self.mesh.delta_star * self.mesh.normals[:, 0], self.mesh.control_points[:, 1] + self.mesh.delta_star * self.mesh.normals[:, 1], color='red', linewidth=1)
         if gcs:
-            self.mesh.plotGlobalCoordinateSystem(size=vectors_percent_scale)
+            self.plotGlobalCoordinateSystem(size=vectors_percent_scale)
 
     def plotGlobalCoordinateSystem(self, size=100):
         r"""Draws the global $X-Y$ coordinate origin.
@@ -352,13 +363,13 @@ class Visualisation:
         r"""Plots the visualisation of the body and calculated off body variables.
         """
         plt.figure()
-        self.velocity_field.plotContour('pressure')
+        if self.config.cont_type != 'none':
+            self.velocity_field.plotContour(self.config.cont_type)
         #self.velocity_field.plotVelocityGrid()
-        self.velocity_field.plotStreamlines(colour='velocity', density=2)
-        self.plotGeometry(vertices=True, control_points=True, normals=False, tangents=False, boundary_layer=True, gcs=False, vectors_percent_scale=1)
+        if self.config.strm_colour != 'none':
+            self.velocity_field.plotStreamlines(colour=self.config.strm_colour, density=1)
+        self.plotGeometry(vertices=self.config.vis_geo[0], control_points=self.config.vis_geo[1], normals=self.config.vis_geo[2], tangents=self.config.vis_geo[3], boundary_layer=self.config.vis_geo[4], gcs=self.config.vis_geo[5], vectors_percent_scale=2)
         plt.axis('scaled')
-        #plt.show()
-
-        #plt.figure()
-        #plt.plot(self.mesh.cp.flatten())
+        plt.xlabel('x [m]')
+        plt.ylabel('y [m]')
         plt.show()

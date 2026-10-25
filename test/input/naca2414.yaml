@@ -34,6 +34,10 @@ pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
 visualisation: False
+grid_method: 'conformal' # 'cartesian': rectangle OR 'conformal': wraps around body
+vis_geo: [True, True, True, True, True, True] # [vertices, control_points, normals, tangents, boundary_layer, global coords.]
+streamlines_colour: 'velocity' # 'none', 'velocity', or plt colour
+contour_type: 'pressure' # 'none', 'vx', 'vy', 'vmag' or 'pressure'
 scale: 'auto'
 
 # output

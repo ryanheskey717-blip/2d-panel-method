@@ -105,6 +105,7 @@ Any outputs or even internal parameters can be accessed with regular class notat
 print('Lift Coefficient:', case.mesh.c_lift)
 print('Drag Coefficient:', case.mesh.c_drag)
 ```
+**Note:** sweeps overwrite the case variable on each new case to avoid memory issues so this method of accessing variable will results in those from the very last case being accessed. This is why sweeps are forced to save important parameters to a ```.csv``` file in Output.
 
 ### Results Output
 
@@ -134,7 +135,7 @@ This is a brief overview of how to use this code, and documentation for how the 
 This code is still a work in progress, and there are many parts that are not working correctly or are not realistic. Below are some future improvements that will hopefully be made, which will increase the quality of results.
 
 - results with viscous coupling jump around, this is likely due to a horrible stagnation point calculation method.
-- reformat how the viscous coupling is turned on-off in the code.
+- reformat how the viscous coupling is turned on and off in the code.
 - add turbulent blasius boundary layer (at least).
 - maybe add more complex boundary layer (that includes pressure gradients).
 - add boundary layer to velocity field calculation.

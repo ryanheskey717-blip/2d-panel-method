@@ -1,7 +1,7 @@
 ## NOTE: if anything is added here the Config class must be updated accordingly
 
 # settings
-verbose: False
+verbose: True
 
 # input
 geo_file: "Geometries/naca2414_100.dat"
@@ -16,7 +16,7 @@ mu_inf: 1.81e-5
 p_inf: 101325 # Pa
 
 # geometry conditions
-alpha: -2.5 # deg
+alpha: 5 # deg
 
 # solver
 control_point_offset: 1.0e-7 # m (for numerical stability) ( < 1e-5 )
@@ -27,17 +27,21 @@ boundary_layer: 'none' # 'none' or 'blasius' supported currently
 inflation_layers: 10
 wake_starting_index: -1 # 0 for start, -1 for end
 wake_points: 10 # number of points in wake
-wake_length: 0.02 # m
+wake_length: 0.2 # m
 
 # flow properties
 pressure_calculation: "inviscid_bernoulli"
 
 # visualisation
-visualisation: False
+visualisation: True
+grid_method: 'conformal' # 'cartesian': rectangle OR 'conformal': wraps around body
+vis_geo: [True, False, False, False, False, True] # [vertices, control_points, normals, tangents, boundary_layer, global coords.]
+streamlines_colour: 'velocity' # 'none', 'velocity', or plt colour
+contour_type: 'pressure' # 'none', 'vx', 'vy', 'vmag' or 'pressure'
 scale: 'auto'
 
 # output
 output:
   write_to_file: False
   overwrite: True
-  coefficients: 'Output/naca0012_coefficients_bl.csv'
+  coefficients: 'Output/out_coeffs.csv'
