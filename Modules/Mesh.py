@@ -1,5 +1,11 @@
-# class for creating and storing all mesh values, including wake
+r"""
+Mesh Generation and Solver Module
+=================================
 
+Handles the discretization of airfoil geometry, generation of aerodynamic 
+influence coefficient matrices, and execution of the coupled inviscid-viscous 
+iterative solver.
+"""
 import csv
 import numpy as np
 from scipy.interpolate import interp1d
@@ -12,12 +18,44 @@ import Modules.General as General
 import Modules.Viscous as Viscous
 
 class Mesh:
+    r"""Creates and manages the 2D panel mesh and aerodynamic solver routines.
+
+    This class parses the airfoil geometry, calculates panel normal and tangent 
+    vectors, builds the aerodynamic influence coefficient (AIC) matrix, and 
+    orchestrates the iterative inviscid and viscous solving process[cite: 8].
+
+    Attributes:
+        config (Config): Configuration object containing solver settings.
+        vertices (ndarray): `(x, y)` coordinates of the panel endpoints.
+        control_points (ndarray): `(x, y)` coordinates of panel centers offset by a small distance.
+        normals (ndarray): Unit normal vectors for each panel.
+        tangents (ndarray): Unit tangent vectors for each panel.
+        lengths (ndarray): Scalar lengths of each panel.
+        A (ndarray): The AIC matrix for the linear system.
+        b (ndarray): The right-hand side boundary condition vector.
+        transpiration_velocity (ndarray): Blowing velocities simulating boundary layer displacement.
+        source_strengths (ndarray): Computed source strengths for each panel.
+        vortex_strength (float): Computed uniform vortex strength satisfying the Kutta condition.
+    """
     def __init__(self, config):
+        r"""Initializes the Mesh object with the provided configuration.
+
+        Args:
+            config (Config): Configuration settings instance.
+        """
         #import config
         self.config = config
 
     def initialiseSetup(self, first=False):
+        r"""Loads geometry, calculates panel properties, and preallocates arrays.
 
+        Scales the input vertices by the chord length, calculates normalized 
+        tangent and normal vectors, determines control point locations, and 
+        initializes the $A$ matrix and $b$ vector.
+
+        Args:
+            first (bool, optional): Flag indicating if this is the first setup pass.
+        """
         # ================ Start Everything ================ #
         # record start time and initialise
         self.start_time = time.time()
@@ -70,7 +108,13 @@ class Mesh:
         
     # =================== Preconditioning =================== #
     def computeAandb(self):
+        r"""Constructs the linear system for the panel method.
 
+        Populates the aerodynamic influence coefficient matrix $A$ and boundary 
+        condition vector $b$. Implements the zero-penetration (or transpiration) 
+        boundary condition across all control points and applies the Kutta 
+        condition at the trailing edge.
+        """
         # section of A relating to no-penetration boundary condition
         for i in range(self.N): # control point
             for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
@@ -105,14 +149,23 @@ class Mesh:
 
     # ================== Inviscid Solving ===================== #
     def solveInviscid(self):
+        r"""Solves the linear system to find source strengths and vortex strength."""
         x = np.linalg.solve(self.A, self.b)
         self.source_strengths = x[:-1]
         self.vortex_strength = x[-1]
     
     # =================== Viscous Solving ===================== #
     def solveViscous(self, initial=False):
+        r"""Calculates tangential velocities and updates viscous boundary layer properties.
+
+        Computes the displacement thickness and corresponding transpiration velocity 
+        for the next inviscid iteration if viscous coupling is enabled.
+
+        Args:
+            initial (bool, optional): Flag indicating if this is the initial viscous pass.
+        """
         # calculate tangential velocity at control points and vertices
-        self.calculateTangentialVelocityAtControlPoints()
+        self.calculateTangentialVelocityAtControlPoints() # TODO: maybe do this elsewhere do this func. does not need to be run when no viscous
         self.velocity_tangent_at_vertices = self.interpControlPointsToVertices(self.velocity_tangent_at_control_points)
 
         # call viscous solving functions
@@ -125,6 +178,14 @@ class Mesh:
     
     # ======================= General ========================= #
     def interpControlPointsToVertices(self, cp_vals):
+        r"""Interpolates values from panel control points to panel vertices.
+
+        Args:
+            cp_vals (ndarray): Array of scalar values evaluated at control points.
+
+        Returns:
+            ndarray: Array of values interpolated to the vertices using inverse distance weighting.
+        """
         # find distances of vertices to control points
         outs = []
         dist1 = 0; dist2 = 0; v1 = 0; v2 = 0
@@ -151,6 +212,12 @@ class Mesh:
         return outs
 
     def updateWakePoints(self, first=False): # TODO: only used for vis now (simplify)
+        r"""Initializes or updates the spatial coordinates of the trailing edge wake. Only used for 
+        visualisation purposes for now.
+
+        Args:
+            first (bool, optional): If True, generates the initial straight wake trajectory.
+        """
         if first == True:
             start_point = self.vertices[self.config.wake_starting_index]
             self.wake_vertices = np.linspace(start_point, start_point + (self.config.wake_length, 0), self.config.wake_points) # TODO: is this better?: * self.config.V_inf_vec / self.config.V_inf
@@ -162,12 +229,14 @@ class Mesh:
     # ================= Flow Properties =================== #
 
     def calculateTangentialVelocityAtControlPoints(self):
+        r"""Evaluates the total tangential velocity at each control point."""
         self.velocity_tangent_at_control_points = np.zeros(self.N)
         for i in range(self.N): # control point
             total_vel = self.config.V_inf_vec + flows.getConstantSourcePanelsVelocity(self, self.control_points[i]) + flows.getConstantVortexPanelsVelocity(self, self.control_points[i])
             self.velocity_tangent_at_control_points[i] = np.dot(total_vel, self.tangents[i])
 
     def calculatePressureOnPanels(self):
+        r"""Delegates pressure calculation based on the configured method."""
         if self.config.pressure_calculation == "inviscid_bernoulli":
             # tangential velocity calculated in viscous solve
             self.pressureFromBernoulli()
@@ -177,10 +246,12 @@ class Mesh:
             self.pressureFromBernoulli()
 
     def pressureFromBernoulli(self): # dimensional
+        r"""Calculates dimensional pressure and the pressure coefficient $C_p$ using Bernoulli's equation."""
         self.pressure = self.config.p_inf - 0.5 * self.config.rho_inf * ( self.velocity_tangent_at_control_points ** 2 - self.config.V_inf ** 2 )
         self.cp = 1 - (self.velocity_tangent_at_control_points / self.config.V_inf) ** 2
 
     def calculateForcesAndMoments(self):
+        r"""Calculates the total lift, drag, and moment coefficients from pressure and viscous forces."""
         self.total_force = self.pressureForce() + self.viscousForce()
         self.total_moment = self.pressureMoment() + self.viscousMoment()
 
@@ -193,13 +264,22 @@ class Mesh:
         self.c_drag = np.dot(self.c_force, np.array([np.cos(self.config.alpha), np.sin(self.config.alpha)]))
 
     def pressureForce(self): # sum integrate for forces (as only know pressure at control points i.e. centres)
-        
+        r"""Integrates the pressure distribution to find the net inviscid force vector.
+
+        Returns:
+            ndarray: The $(F_x, F_y)$ force components generated by panel pressures.
+        """
         fx = np.sum( - self.pressure * self.lengths * self.normals[:, 0] )
         fy = np.sum( - self.pressure * self.lengths * self.normals[:, 1] )
 
         return np.array([fx, fy])
 
     def viscousForce(self): #### TODO: investigate issue of discontinuous force vs. aoa (i think due to i_stag changing)
+        r"""Integrates the skin friction distribution to find the net viscous force vector.
+
+        Returns:
+            ndarray: The $(F_x, F_y)$ force components generated by skin friction.
+        """
         if self.config.include_viscous:
             q = 0.5 * self.config.rho_inf * self.config.V_inf**2
             fx = 0; fy = 0
@@ -217,13 +297,22 @@ class Mesh:
             return np.array([0, 0])
 
     def pressureMoment(self):
+        r"""Calculates the pitching moment generated by pressure forces around the reference point.
 
+        Returns:
+            float: The net aerodynamic moment from inviscid pressure.
+        """
         r = self.control_points - self.config.ref_position
         forces = - self.pressure[:, None] * self.normals * self.lengths[:, None]
 
         return np.sum(r[:, 0] * forces[:, 1] - r[:, 1] * forces[:, 0])
 
     def viscousMoment(self):
+        r"""Calculates the pitching moment generated by viscous forces around the reference point.
+
+        Returns:
+            float: The net aerodynamic moment from skin friction.
+        """
         if self.config.include_viscous:
             r = self.control_points - self.config.ref_position
             
@@ -244,6 +333,11 @@ class Mesh:
 
     # ====================== Running =========================== #
     def run(self):
+        r"""Executes a single iteration of the solver.
+
+        Preconditions the matrix, solves the inviscid flow, updates viscous models, 
+        evaluates pressure forces, and checks convergence.
+        """
         if self.config.verbose:
             self.printNewCase()
 
@@ -280,7 +374,11 @@ class Mesh:
         self.updateResults()
 
     def run_case(self):
+        r"""Main execution loop that drives the solver to convergence.
 
+        Iteratively calls `run()` until the convergence criteria are met, then 
+        handles output and visualization generation.
+        """
         # calculate mesh parameters
         self.initialiseSetup()
         if self.config.verbose:
@@ -317,6 +415,7 @@ class Mesh:
             self.printFinal()
 
     def checkConvergence(self):
+        r"""Evaluates iteration counts and solver state to flag completion."""
         if self.iteration == 2 and not self.config.run_till_converged and self.config.include_viscous:
             self.converged = True
         elif self.iteration == 1 and not self.config.run_till_converged and not self.config.include_viscous:
@@ -328,12 +427,17 @@ class Mesh:
     # ===================== Output ========================= #
 
     def updateResults(self):
-
+        r"""Aggregates flow variables and integrated forces into a results list."""
         self.results = [self.config.geo_file, self.config.M_inf, self.config.V_inf, self.config.Re, np.rad2deg(self.config.alpha), self.config.chord, self.config.ref_position[0], self.config.ref_position[1],
                         self.total_force[0], self.total_force[1], self.c_force[0], self.c_force[1], self.drag, self.lift, self.c_drag, self.c_lift, self.total_moment, self.c_moment]
 
     def resultsToCSV(self, first_entry=True):
+        r"""Writes the current aerodynamic results to a CSV file.
 
+        Args:
+            first_entry (bool, optional): If True, overwrites the file and writes headers. 
+                If False, appends a new row of data.
+        """
         # set writing type
         if first_entry == False:
             mode = 'a' # append (next case saves below previous)
@@ -351,34 +455,9 @@ class Mesh:
             # write data
             writer.writerow(self.results)
 
-
-    # ==================== Plotting ======================== #
-
-    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=False, gcs=False, vectors_percent_scale=100):
-        plt.plot(self.vertices[:, 0], self.vertices[:, 1], color='black', linewidth=1)
-        plt.plot(self.wake_vertices[:, 0], self.wake_vertices[:, 1], color='black', linewidth=1)
-        if vertices:
-            plt.scatter(self.vertices[:, 0], self.vertices[:, 1], color='black', s=3)
-        if control_points:
-            plt.scatter(self.control_points[:, 0], self.control_points[:, 1], color='red', s=3)
-        if normals:
-            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.normals[:, 0], self.normals[:, 1], angles='xy', scale_units='xy', scale=100/vectors_percent_scale, width=0.005, color='g')
-        if tangents:
-            plt.quiver(self.control_points[:, 0], self.control_points[:, 1], self.tangents[:, 0], self.tangents[:, 1], angles='xy', scale_units='xy', scale=100/vectors_percent_scale, width=0.005, color='b')
-        if boundary_layer:
-            plt.plot(self.control_points[:, 0] + self.delta_star * self.normals[:, 0], self.control_points[:, 1] + self.delta_star * self.normals[:, 1], color='red', linewidth=1)
-        if gcs:
-            self.plotGlobalCoordinateSystem(size=vectors_percent_scale)
-
-    def plotGlobalCoordinateSystem(self, size=100):
-        plt.quiver(0, 0, 1, 0, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='r') # x
-        plt.text(1.05 * size/100, 0, "x", color='r', ha='left', va='center', fontweight='bold')
-        plt.quiver(0, 0, 0, 1, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b') # y
-        plt.text(0, 1.05 * size/100, "y", color='b', ha='center', va='bottom', fontweight='bold')
-    
-
     # =================== Printing ====================== #
     def printInitial(self):
+        r"""Prints an update when verbose is set to true."""
         print( '')
         print( '~' * 60)
         print( '2D Panel Method for Airfoils'.center(60))
@@ -392,42 +471,49 @@ class Mesh:
         print( '')
     
     def printNewCase(self):
+        r"""Prints an update when verbose is set to true."""
         print( '~' * 22, f' Iteration {self.iteration:.0f} ', '~' * 23)
         print( '')
         print( 'Setting up viscous correction ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printAfterSetup(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print( 'Populating A and b ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterPopulation(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print( 'Solving inviscid ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterInviscidSolve(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print( 'Solving viscous (if applicable) ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterViscousSolve(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print( 'Calculating forces ...', end='', flush=True)
         self.last_time_check = time.time()
 
     def printAfterNoViscous(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Skipped ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print( 'Calculating forces ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printForcesResults(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
         print(f'Results Summary: ({"Converged" if self.converged else "Not Converged"})')
@@ -444,22 +530,27 @@ class Mesh:
         print( '')
 
     def printBeforeWriting(self):
+        r"""Prints an update when verbose is set to true."""
         print( 'Writing results to file ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printAfterWriting(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
     
     def printBeforeVelField(self):
+        r"""Prints an update when verbose is set to true."""
         print( 'Creating visualisation ...', end='', flush=True)
         self.last_time_check = time.time()
     
     def printAfterVelField(self):
+        r"""Prints an update when verbose is set to true."""
         print(f' Done ({time.time() - self.last_time_check:.2f} s)')
         print( '')
     
     def printFinal(self):
+        r"""Prints an update when verbose is set to true."""
         print( 'Exiting ... Done')
         print( '')
         print(f'Total Runtime: {time.time() - self.start_time:.3f} s')

@@ -1,6 +1,10 @@
-# general classes and functions
-# (loading / printing / visualising)
+"""
+General
+================
 
+This module provides the classes for general setup and visualisation. This module is used
+for setting up the necessary parts to run and analyse the results of the panel method.
+"""
 import yaml
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,8 +16,51 @@ import Modules.ElementaryFlows as flows
 
 # load and store config
 class Config:
-    def __init__(self, input_file):
+    r"""Loads, stores, and processes configuration parameters for the panel method solver.
 
+    This class reads input settings from a specified YAML configuration file,
+    initializes flow conditions and solver parameters, and computes derived
+    aerodynamic properties.
+
+    Attributes:
+        full_data (dict): The complete raw data dictionary loaded from the YAML file.
+        verbose (bool): Flag to enable detailed print outputs.
+        geo_file (str): Path to the airfoil geometry file.
+        chord (float): Chord length of the airfoil.
+        ref_position (ndarray): `(x, y)` coordinate array for the aerodynamic reference position.
+        M_inf (float): Freestream Mach number.
+        T_inf (float): Freestream temperature in Celsius.
+        rho_inf (float): Freestream density $\rho$.
+        mu_inf (float): Freestream dynamic viscosity $\mu$.
+        p_inf (float): Freestream static pressure.
+        alpha (float): Angle of attack $\alpha$ in radians (converted internally from degrees).
+        control_point_offset (float): Offset distance for panel collocation points.
+        convergence_criterion (float): Tolerance threshold for solver convergence.
+        include_viscous (bool): Flag indicating if viscous boundary layer coupling is active.
+        boundary_layer_calculation (str): Type of boundary layer model to use (e.g., 'none', 'blasius').
+        inflation_layers (int): Number of inflation layers for the mesh or wake.
+        wake_starting_index (int): Panel index where the downstream wake begins.
+        wake_points (int): Number of discrete points defining the wake downstream.
+        wake_length (float): Total length of the simulated wake.
+        pressure_calculation (str): Method used for computing pressure coefficients.
+        visualisation (bool): Flag to enable plot generation and geometry visualization.
+        scale (float): Scaling factor for geometry visualization.
+        write_to_file (bool): Flag to save output data to a file.
+        overwrite_output (bool): Flag to allow overwriting existing output files.
+        out_coeff_file (str): File path for saving aerodynamic coefficients.
+        sweep_iteration (int): Counter for the current alpha or parameter sweep iteration.
+        nu_inf (float): Freestream kinematic viscosity $\nu$.
+        V_inf (float): Freestream velocity magnitude.
+        V_inf_vec (ndarray): `(u, v)` freestream velocity vector components.
+        Re (float): Reynolds number based on the chord length.
+        run_till_converged (bool): Flag determining if the solver loops until convergence or runs a single iteration.
+    """
+    def __init__(self, input_file):
+        r"""Initializes the Config object by parsing a YAML configuration file.
+
+        Args:
+            input_file (str): Path to the YAML configuration file containing the solver settings.
+        """
         # load yaml file
         with open(input_file, "r") as file:
             self.full_data = yaml.safe_load(file)
@@ -65,6 +112,14 @@ class Config:
         self.update()
 
     def update(self):
+        r"""Computes derived aerodynamic parameters and updates solver states.
+
+        Calculates kinematic viscosity ($\nu$), converts the input angle of attack 
+        ($\alpha$) to radians, computes the freestream velocity vector using ideal 
+        gas relations, and calculates the Reynolds number ($Re$). It also evaluates 
+        configuration flags to determine if viscous boundary layer calculations and 
+        iterative convergence loops should be enabled.
+        """
         # calculated values
         self.nu_inf = self.mu_inf / self.rho_inf
         self.alpha = np.deg2rad(self.alpha)
@@ -87,8 +142,23 @@ class Config:
 # ==================== Analysing ========================= #
 
 class VelocityField:
-    def __init__(self, geo_mesh, config, area_type, xlim=None, ylim=None, nx=None, ny=None):
+    r"""Generates a grid of off-body points, and calculates the velocity at each of these to visualise
+    the flow around the solved body.
 
+    """
+    def __init__(self, geo_mesh, config, area_type, xlim=None, ylim=None, nx=None, ny=None):
+        r"""Initializes the VelocityField object by creating a grid around the aerodynamic body
+        and calculates the velocity at each point.
+
+        Args:
+            geo_mesh (object): Instance of Mesh class in which the panels are defined.
+            config (object): Instance of the Config class containing settings.
+            aera_type (str): 'cartesian' x, y rectangle OR 'conformal' wraps around body.
+            xlim (tuple): domain of cartesian grid.
+            ylim (tuple): range of cartesian grid.
+            nx (int): number of x points.
+            ny (int): number of y points.
+        """
         # input values
         self.config = config
         self.area_type = area_type
@@ -150,7 +220,12 @@ class VelocityField:
     # ================ Velocity Plotting ================== #
 
     def plotStreamlines(self, colour='C0', density=1):
+        r"""Plots streamlines on a preexisting figure.
 
+        Args:
+            color (str): The colour of the lines ('velocity' to be coloured byt the velocity at each point)
+            density (int, float): How dense should the streamlines be.
+        """
         if self.area_type == 'cartesian':
             if colour == 'velocity': # colour by velocity
                 colour = np.sqrt(self.v[0]**2 + self.v[1]**2)
@@ -189,6 +264,12 @@ class VelocityField:
                     art.remove()
 
     def plotContour(self, var, colorbar=True):
+        r"""Plots contours of various variables on a preexisting figure.
+
+        Args:
+            var (str): What varible should the contour be based on ('vx', 'vy', 'mag', 'pressure')
+            colorbar (bool): Include colorbar or not (defaults to True)
+        """
         if var == "vx":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], self.v[0], levels=50, cmap='viridis')
         elif var == "vy":
@@ -205,25 +286,76 @@ class VelocityField:
             plt.colorbar(contour, label=var)
     
     def plotVelocityGrid(self):
+        r"""Plots the off-body grid points at which the velocity field has been calculated at 
+        on a preexisting figure.
+        """
         for i in range(self.meshgrid[0].shape[0]):
             plt.plot(self.meshgrid[0][i, :], self.meshgrid[1][i, :], color='gray', linewidth=0.5)
         for j in range(self.meshgrid[0].shape[1]):
             plt.plot(self.meshgrid[0][:, j], self.meshgrid[1][:, j], color='gray', linewidth=0.5)
     
 class Visualisation:
+    r"""Handles the generation of a visualisation of the flow around a body.
+    """
     def __init__(self, config, mesh):
-        
+        r"""Initialises a visualisation and accepts the info required to create it. Creates a 
+        VelocityField instance to calculate off-body velocities.
+
+        Args:
+            config (object): Instance of Config class, containing settings.
+            mesh (object): Instance of Mesh class, containing geometry and solved panel system.
+        """
         #self.velocity_field = VelocityField(mesh, config, 'cartesian', (0.095, 0.105), (-0.005, 0.005), 100, 100) # (-0.02, 0.14), (-0.07, 0.07)
         self.velocity_field = VelocityField(mesh, config, 'conformal', ylim=0.05, ny=50)
         self.config = config
         self.mesh = mesh
 
+    def plotGeometry(self, vertices=False, control_points=False, normals=False, tangents=False, boundary_layer=False, gcs=False, vectors_percent_scale=100):
+        r"""Generates diagnostic plots of the panel mesh and boundary layer.
+
+        Args:
+            vertices (bool): Flag to scatter plot panel endpoints.
+            control_points (bool): Flag to scatter plot control points.
+            normals (bool): Flag to plot normal vectors via quiver.
+            tangents (bool): Flag to plot tangent vectors via quiver.
+            boundary_layer (bool): Flag to plot the displacement thickness overlay.
+            gcs (bool): Flag to plot the global coordinate system axes.
+            vectors_percent_scale (float): Scaling factor for vector visualization.
+        """
+        plt.plot(self.mesh.vertices[:, 0], self.mesh.vertices[:, 1], color='black', linewidth=1)
+        plt.plot(self.mesh.wake_vertices[:, 0], self.mesh.wake_vertices[:, 1], color='black', linewidth=1)
+        if vertices:
+            plt.scatter(self.mesh.vertices[:, 0], self.mesh.vertices[:, 1], color='black', s=3)
+        if control_points:
+            plt.scatter(self.mesh.control_points[:, 0], self.mesh.control_points[:, 1], color='red', s=3)
+        if normals:
+            plt.quiver(self.mesh.control_points[:, 0], self.mesh.control_points[:, 1], self.mesh.normals[:, 0], self.mesh.normals[:, 1], angles='xy', scale_units='xy', scale=100/vectors_percent_scale, width=0.005, color='g')
+        if tangents:
+            plt.quiver(self.mesh.control_points[:, 0], self.mesh.control_points[:, 1], self.mesh.tangents[:, 0], self.mesh.tangents[:, 1], angles='xy', scale_units='xy', scale=100/vectors_percent_scale, width=0.005, color='b')
+        if boundary_layer:
+            plt.plot(self.mesh.control_points[:, 0] + self.mesh.delta_star * self.mesh.normals[:, 0], self.mesh.control_points[:, 1] + self.mesh.delta_star * self.mesh.normals[:, 1], color='red', linewidth=1)
+        if gcs:
+            self.mesh.plotGlobalCoordinateSystem(size=vectors_percent_scale)
+
+    def plotGlobalCoordinateSystem(self, size=100):
+        r"""Draws the global $X-Y$ coordinate origin.
+
+        Args:
+            size (float): Scaling parameter for axis length.
+        """
+        plt.quiver(0, 0, 1, 0, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='r') # x
+        plt.text(1.05 * size/100, 0, "x", color='r', ha='left', va='center', fontweight='bold')
+        plt.quiver(0, 0, 0, 1, angles='xy', scale_units='xy', scale=100/size, width=0.005, color='b') # y
+        plt.text(0, 1.05 * size/100, "y", color='b', ha='center', va='bottom', fontweight='bold')
+
     def plot(self):
+        r"""Plots the visualisation of the body and calculated off body variables.
+        """
         plt.figure()
         self.velocity_field.plotContour('pressure')
         #self.velocity_field.plotVelocityGrid()
         self.velocity_field.plotStreamlines(colour='velocity', density=2)
-        self.mesh.plotGeometry(vertices=True, control_points=True, normals=False, tangents=False, boundary_layer=True, gcs=False, vectors_percent_scale=1)
+        self.plotGeometry(vertices=True, control_points=True, normals=False, tangents=False, boundary_layer=True, gcs=False, vectors_percent_scale=1)
         plt.axis('scaled')
         #plt.show()
 

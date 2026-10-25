@@ -1,7 +1,28 @@
+"""
+Elementary Flows
+================
+
+This module provides the core mathematical functions for evaluating 2D potential flow 
+components. It includes induced velocity calculations for constant-strength source 
+distributions and vortex sheets used to solve the inviscid flow field.
+"""
 import numpy as np
 
 def getConstantSourcePanelVelocity(vertex_1, vertex_2, sample_point, strength):
+    r"""Calculates the velocity contribution at a sample point from a 2D source panel.
 
+    This function computes the induced velocity `(u, v)` from a constant-strength 
+    source panel defined between two vertices using standard 2D potential flow equations.
+    
+    Args:
+        vertex_1 (tuple or ndarray): The `(x, y)` coordinates of the panel's first vertex.
+        vertex_2 (tuple or ndarray): The `(x, y)` coordinates of the panel's second vertex.
+        sample_point (tuple or ndarray): The `(x, y)` coordinates where the velocity is evaluated.
+        strength (float): The constant source strength $\sigma$ of the panel.
+
+    Returns:
+        tuple[float, float]: The induced velocity `(u, v)` in the global $x$ and $y$ directions.
+    """
     L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
     phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
 
@@ -32,6 +53,15 @@ def getConstantSourcePanelVelocity(vertex_1, vertex_2, sample_point, strength):
     return u, v
 
 def getConstantSourcePanelsVelocity(mesh, sample_point):
+    """Calculates the contribution of all source panels to the velocity at an arbitrary point.
+
+    Args:
+        mesh (object): Instance of the Mesh class.
+        sample_point (ndarray): (x, y) numpy array of coordinates of sampling point.
+    
+    Returns:
+        tuple[float, float]: Resultant velocity $(u_{total}, v_{total})$ in the horizontal (x) and vertical (y) directions
+    """
     ut = 0; vt = 0
     for i in range(mesh.N):
         u, v = getConstantSourcePanelVelocity(mesh.vertices[i], mesh.vertices[i+1], sample_point, mesh.source_strengths[i])
@@ -40,7 +70,20 @@ def getConstantSourcePanelsVelocity(mesh, sample_point):
     return ut, vt
 
 def getConstantVortexPanelVelocity(vertex_1, vertex_2, sample_point, strength):
+    r"""Calculates the velocity contribution at a sample point from a 2D vortex panel.
 
+    This function computes the induced velocity `(u, v)` from a constant-strength 
+    vortex panel defined between two vertices using standard 2D potential flow equations.
+    
+    Args:
+        vertex_1 (tuple or ndarray): The `(x, y)` coordinates of the panel's first vertex.
+        vertex_2 (tuple or ndarray): The `(x, y)` coordinates of the panel's second vertex.
+        sample_point (tuple or ndarray): The `(x, y)` coordinates where the velocity is evaluated.
+        strength (float): The constant vortex strength $\gamma$ of the panel.
+
+    Returns:
+        tuple[float, float]: The induced velocity `(u, v)` in the global $x$ and $y$ directions.
+    """
     L = np.sqrt( ( vertex_2[0] - vertex_1[0])**2 + (vertex_2[1] - vertex_1[1])**2 ) # length of panel
     phi = np.atan2( vertex_2[1]-vertex_1[1], vertex_2[0]-vertex_1[0]) # rotation angle of the panel
 
@@ -83,9 +126,19 @@ def getConstantVortexPanelVelocity(vertex_1, vertex_2, sample_point, strength):
     return u, v
 
 def getConstantVortexPanelsVelocity(mesh, sample_point, strength=None):
+    r"""Calculates the contribution of all vortex panels to the velocity at an arbitrary point.
+
+    Args:
+        mesh (object): Instance of the Mesh class containing panel geometries.
+        sample_point (ndarray): $(x, y)$ NumPy array of coordinates for the sampling point.
+        strength (float, optional): Circulation strength $\gamma$. If not specified, assumed to be contained in mesh.
+
+    Returns:
+        tuple[float, float]: Resultant velocity $(u_{total}, v_{total})$ in the horizontal (x) and vertical (y) directions
+    """
     ut = 0; vt = 0
     for i in range(mesh.N):
-        if strength is None:
+        if strength is None: # used after panel method has been run
             u, v = getConstantVortexPanelVelocity(mesh.vertices[i], mesh.vertices[i+1], sample_point, mesh.vortex_strength)
         else:
             u, v = getConstantVortexPanelVelocity(mesh.vertices[i], mesh.vertices[i+1], sample_point, strength)

@@ -4,7 +4,7 @@
 verbose: False
 
 # input
-geo_file: "Geometries/naca0012_100.dat"
+geo_file: "Geometries/naca2414_100.dat"
 chord: 1.0 # m (reference length)
 ref_position: [0.25, 0] # x(m), y(m)
 
@@ -16,7 +16,7 @@ mu_inf: 1.81e-5
 p_inf: 101325 # Pa
 
 # geometry conditions
-alpha: -5 # deg
+alpha: -2.5 # deg
 
 # solver
 control_point_offset: 1.0e-7 # m (for numerical stability) ( < 1e-5 )
