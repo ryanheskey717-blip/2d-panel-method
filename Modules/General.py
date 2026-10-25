@@ -232,13 +232,15 @@ class VelocityField:
         """
         if self.area_type == 'cartesian':
             if colour == 'velocity': # colour by velocity
-                colour = np.sqrt(self.v[0]**2 + self.v[1]**2)
+                colour_exp = np.sqrt(self.v[0]**2 + self.v[1]**2)
+            else:
+                colour_exp = colour
             
             # plot streamlines
-            strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour, linewidth=1, density=density, cmap='inferno')
+            strm = plt.streamplot(self.meshgrid[0], self.meshgrid[1], self.v[0], self.v[1], color=colour_exp, linewidth=1, density=density, cmap='inferno')
             
             if colour == 'velocity': # add colour bar if needed
-                plt.colorbar(strm.lines)
+                plt.colorbar(strm.lines, label='velocity [m/s]')
 
         elif self.area_type == 'conformal':
             x_vec = np.linspace(self.meshgrid[0].min(), self.meshgrid[0].max(), 100)
@@ -255,13 +257,15 @@ class VelocityField:
             v_cart = griddata(points, v_flat, (x_cart, y_cart), method='linear')
 
             if colour == 'velocity': # colour by velocity
-                colour = np.sqrt(u_cart**2 + v_cart**2)
+                colour_exp = np.sqrt(u_cart**2 + v_cart**2)
+            else:
+                colour_exp = colour
 
             # plot streamlines
-            strm = plt.streamplot(x_cart, y_cart, u_cart, v_cart, color=colour, linewidth=1, density=density, cmap='inferno')
+            strm = plt.streamplot(x_cart, y_cart, u_cart, v_cart, color=colour_exp, linewidth=1, density=density, cmap='inferno')
             
             if colour == 'velocity': # add colour bar if needed
-                plt.colorbar(strm.lines)
+                plt.colorbar(strm.lines, label='velocity [m/s]')
 
         # remove arrows if needed
         arrows = False
@@ -275,7 +279,7 @@ class VelocityField:
         r"""Plots contours of various variables on a preexisting figure.
 
         Args:
-            var (str): What variable should the contour be based on ('vx', 'vy', 'vmag', 'pressure')
+            var (str): What variable should the contour be based on ('vx', 'vy', 'vmag', 'cp')
             colorbar (bool): Include colorbar or not (defaults to True)
         """
         if var == "vx":
@@ -284,7 +288,7 @@ class VelocityField:
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], self.v[1], levels=50, cmap='viridis')
         elif var == "vmag":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], np.sqrt(self.v[0]**2 + self.v[1]**2), levels=50, cmap='viridis')
-        elif var == "pressure":
+        elif var == "cp":
             contour = plt.contourf(self.meshgrid[0], self.meshgrid[1], 1 - (np.sqrt(self.v[0]**2 + self.v[1]**2)/self.config.V_inf)**2, levels=500, cmap='viridis')
         else:
             print("\nWarning!: No valid variable selected for contour plot.\n")
@@ -315,7 +319,7 @@ class Visualisation:
         self.config = config
         self.mesh = mesh
         if self.config.vis_grid_method == 'cartesian':
-            self.velocity_field = VelocityField(mesh, config, 'cartesian', (0.095, 0.105), (-0.005, 0.005), 100, 100) # (-0.02, 0.14), (-0.07, 0.07)
+            self.velocity_field = VelocityField(mesh, config, 'cartesian', (-0.2, 1.2), (-0.3, 0.3), 100, 100) # (-0.02, 0.14), (-0.07, 0.07)
         elif self.config.vis_grid_method == 'conformal':
             self.velocity_field = VelocityField(mesh, config, 'conformal', ylim=0.2, ny=50)
         else:
@@ -334,7 +338,7 @@ class Visualisation:
             vectors_percent_scale (float): Scaling factor for vector visualization.
         """
         plt.plot(self.mesh.vertices[:, 0], self.mesh.vertices[:, 1], color='black', linewidth=1)
-        plt.plot(self.mesh.wake_vertices[:, 0], self.mesh.wake_vertices[:, 1], color='black', linewidth=1)
+        #plt.plot(self.mesh.wake_vertices[:, 0], self.mesh.wake_vertices[:, 1], color='black', linewidth=1)
         if vertices:
             plt.scatter(self.mesh.vertices[:, 0], self.mesh.vertices[:, 1], color='black', s=3)
         if control_points:
@@ -362,7 +366,7 @@ class Visualisation:
     def plot(self):
         r"""Plots the visualisation of the body and calculated off body variables.
         """
-        plt.figure()
+        plt.figure(figsize=(12, 5))
         if self.config.cont_type != 'none':
             self.velocity_field.plotContour(self.config.cont_type)
         #self.velocity_field.plotVelocityGrid()

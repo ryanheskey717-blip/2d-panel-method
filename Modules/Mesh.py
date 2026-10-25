@@ -37,14 +37,16 @@ class Mesh:
         source_strengths (ndarray): Computed source strengths for each panel.
         vortex_strength (float): Computed uniform vortex strength satisfying the Kutta condition.
     """
-    def __init__(self, config):
+    def __init__(self, config, A=None):
         r"""Initializes the Mesh object with the provided configuration.
 
         Args:
             config (Config): Configuration settings instance.
+            A (ndarray, optional): Predefined A matrix (if provided, A is not calculated)
         """
         #import config
         self.config = config
+        self.A = A
 
     def initialiseSetup(self, first=False):
         r"""Loads geometry, calculates panel properties, and preallocates arrays.
@@ -98,7 +100,11 @@ class Mesh:
 
         # ================= Preallocate Arrays ==================== #
         self.N = len(self.control_points)
-        self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
+        if self.A is None: # check if A is provided for sweeps
+            self.A_provided = False
+            self.A = np.zeros((self.N+1, self.N+1)) # +1 for kutta condition
+        else: # dont preallocate if it exists
+            self.A_provided = True
         self.b = np.zeros(self.N+1)
         self.delta_star = np.zeros(self.N) # BL computed at each control point
         self.updateWakePoints(first=True)
@@ -115,29 +121,30 @@ class Mesh:
         boundary condition across all control points and applies the Kutta 
         condition at the trailing edge.
         """
-        # section of A relating to no-penetration boundary condition
-        for i in range(self.N): # control point
+        if not self.A_provided: # calculate A if it was not provided
+            # section of A relating to no-penetration boundary condition
+            for i in range(self.N): # control point
+                for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
+                    if j == self.N: # vortex influence
+                        u, v = flows.getConstantVortexPanelsVelocity(self, self.control_points[i], strength=1.0)
+                        self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
+                    else:
+                        if i == j: # source self-influence
+                            self.A[i, j] = 0.5
+                        else:
+                            u, v = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
+                            self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
+
+            # section of A relating to kutta condition (these find tangential influences)
             for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
                 if j == self.N: # vortex influence
-                    u, v = flows.getConstantVortexPanelsVelocity(self, self.control_points[i], strength=1.0)
-                    self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
+                    u1, v1 = flows.getConstantVortexPanelsVelocity(self, self.control_points[0], strength=1.0)  # at upper TE control point
+                    u2, v2 = flows.getConstantVortexPanelsVelocity(self, self.control_points[-1], strength=1.0) # at lower TE control point
+                    self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
                 else:
-                    if i == j: # source self-influence
-                        self.A[i, j] = 0.5
-                    else:
-                        u, v = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[i], strength=1.0)
-                        self.A[i, j] = np.dot(self.normals[i], np.array([u, v]))
-
-        # section of A relating to kutta condition (these find tangential influences)
-        for j in range(self.N + 1): # panel + influence from constant strength vortex sheet
-            if j == self.N: # vortex influence
-                u1, v1 = flows.getConstantVortexPanelsVelocity(self, self.control_points[0], strength=1.0)  # at upper TE control point
-                u2, v2 = flows.getConstantVortexPanelsVelocity(self, self.control_points[-1], strength=1.0) # at lower TE control point
-                self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
-            else:
-                u1, v1 = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[0], strength=1.0)  # at upper TE control point
-                u2, v2 = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[-1], strength=1.0) # at lower TE control point
-                self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
+                    u1, v1 = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[0], strength=1.0)  # at upper TE control point
+                    u2, v2 = flows.getConstantSourcePanelVelocity(self.vertices[j], self.vertices[j+1], self.control_points[-1], strength=1.0) # at lower TE control point
+                    self.A[-1, j] = (np.dot(self.tangents[0], np.array([u1, v1]))) + (np.dot(self.tangents[-1], np.array([u2, v2])))
 
         # RHS
         for i in range(self.N + 1): # control points + kutta condition

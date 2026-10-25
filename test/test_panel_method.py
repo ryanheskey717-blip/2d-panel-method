@@ -8,6 +8,7 @@ sys.path.append(str(parent_dir))
 # import modules
 import Modules.PanelMethod as pm
 import Modules.SweepAnalysis as swan
+import pytest
 
 # ==================== Positive Tests ====================== #
 def test_01():
@@ -83,3 +84,21 @@ def test_06():
     assert(abs(case.mesh.c_lift - -0.047042448804226394) < 1e-12)
     assert(abs(case.mesh.c_drag - 0.0007155124061095594) < 1e-12)
     assert(abs(case.mesh.c_moment - 0.050115021061922685) < 1e-12)
+
+# ==================== Negative Tests ====================== #
+
+def test_07():
+    """
+        Tests for error when mesh file does not exist.
+    """
+    with pytest.raises(FileNotFoundError):
+        case = pm.SingleCase('test/input/neg_07.yaml')
+        case.run()
+
+def test_08():
+    """
+        Tests for error when generating velocity grid for visualisation.
+    """
+    with pytest.raises(AttributeError):
+        case = pm.SingleCase('test/input/neg_08.yaml')
+        case.run()

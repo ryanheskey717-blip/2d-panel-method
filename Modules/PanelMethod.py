@@ -107,7 +107,10 @@ class Sweep:
             self.config.update()
             
             # initialise new setup
-            self.mesh = Mesh(self.config)
+            if i == 0:
+                self.mesh = Mesh(self.config)
+            else:
+                self.mesh = Mesh(self.config, A=self.mesh.A)
 
             # run panel method
             self.mesh.run_case()
